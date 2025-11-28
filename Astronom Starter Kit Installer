@@ -14,7 +14,7 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-LAUNCHER_URL="https://raw.githubusercontent.com/YOUR_USERNAME/astronomy-starter-kit/main/astro"
+LAUNCHER_URL="https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/main/astro"
 INSTALL_DIR="$HOME/.local/bin"
 
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
