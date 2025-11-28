@@ -4,10 +4,10 @@
 # https://github.com/RedChaosWolf92/astronomy-starter-kit
 #
 # One-line installation:
-#   curl -sSL https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/main/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/Main/astronomyinstaller.sh | bash
 #
 # Or download and run:
-#   wget https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/main/install.sh
+#   wget https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/Main/astronomyinstaller.sh
 #   bash install.sh
 #
 

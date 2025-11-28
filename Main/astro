@@ -1,0 +1,1184 @@
+#!/bin/bash
+#
+# ASTRONOMY STARTER KIT - Smart Launcher
+# Zero-configuration astronomy development environment
+#
+# Repository: https://github.com/RedChaosWolf92/astronomy-starter-kit
+# Version: 1.0.0
+# License: MIT
+#
+# Tested on: Ubuntu 22.04 LTS, Ubuntu 24.04 LTS
+#
+# Installation:
+#   curl -sSL https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/Main/astronomyinstaller.sh | bash
+#
+# Usage:
+#   astro              # First run: auto-installs everything
+#   astro              # Subsequent runs: shows menu
+#   astro jupyter      # Launch Jupyter Lab
+#   astro topcat       # Launch TOPCAT
+#   astro ds9          # Launch DS9 image viewer
+#   astro python       # Launch Python with astronomy environment
+#   astro status       # Show installation status
+#   astro doctor       # Check environment health
+#   astro repair       # Repair broken components
+#   astro update       # Update packages
+#   astro uninstall    # Remove everything cleanly
+#   astro help         # Show help
+#
+
+# Exit on error (but handle errors gracefully where needed)
+set -e
+
+#==============================================================================
+# CONFIGURATION
+#==============================================================================
+
+# Version
+VERSION="1.0.0"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Directory configuration
+ASTRO_HOME="${ASTRO_HOME:-$HOME/.astro}"
+ASTRO_ENV="$ASTRO_HOME/env"
+ASTRO_BIN="$ASTRO_HOME/bin"
+ASTRO_DATA="$ASTRO_HOME/data"
+ASTRO_CACHE="$ASTRO_HOME/cache"
+ASTRO_SCRIPTS="$ASTRO_HOME/scripts"
+ASTRO_NOTEBOOKS="$ASTRO_HOME/notebooks"
+
+# State tracking files
+STATE_FILE="$ASTRO_HOME/.state"
+INSTALL_LOG="$ASTRO_HOME/.install.log"
+
+# URLs for downloads
+TOPCAT_URL="https://www.star.bris.ac.uk/~mbt/topcat/topcat-full.jar"
+
+#==============================================================================
+# UTILITY FUNCTIONS
+#==============================================================================
+
+# Logging functions
+log() {
+    local msg="[$(date +%T)] $*"
+    echo -e "${BLUE}${msg}${NC}"
+    [ -f "$INSTALL_LOG" ] && echo "$msg" >> "$INSTALL_LOG"
+}
+
+success() {
+    local msg="✓ $*"
+    echo -e "${GREEN}${msg}${NC}"
+    [ -f "$INSTALL_LOG" ] && echo "$msg" >> "$INSTALL_LOG"
+}
+
+error() {
+    local msg="✗ $*"
+    echo -e "${RED}${msg}${NC}"
+    [ -f "$INSTALL_LOG" ] && echo "$msg" >> "$INSTALL_LOG"
+}
+
+warning() {
+    local msg="⚠ $*"
+    echo -e "${YELLOW}${msg}${NC}"
+    [ -f "$INSTALL_LOG" ] && echo "$msg" >> "$INSTALL_LOG"
+}
+
+info() {
+    echo -e "${CYAN}$*${NC}"
+}
+
+# Print a header box
+print_header() {
+    local title="$1"
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
+    printf "${CYAN}║${NC}  %-62s ${CYAN}║${NC}\n" "$title"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+# Print a section divider
+print_divider() {
+    echo -e "${CYAN}────────────────────────────────────────────────────────────────${NC}"
+}
+
+#==============================================================================
+# STATE MANAGEMENT
+#==============================================================================
+
+get_state() {
+    local key=$1
+    if [ -f "$STATE_FILE" ]; then
+        grep "^${key}=" "$STATE_FILE" 2>/dev/null | cut -d'=' -f2 || echo ""
+    else
+        echo ""
+    fi
+}
+
+set_state() {
+    local key=$1
+    local value=$2
+    mkdir -p "$ASTRO_HOME"
+    
+    if [ -f "$STATE_FILE" ]; then
+        # Remove existing key if present
+        sed -i "/^${key}=/d" "$STATE_FILE" 2>/dev/null || true
+    fi
+    echo "${key}=${value}" >> "$STATE_FILE"
+}
+
+is_installed() {
+    local component=$1
+    [ "$(get_state "installed_${component}")" == "true" ]
+}
+
+mark_installed() {
+    local component=$1
+    set_state "installed_${component}" "true"
+}
+
+mark_uninstalled() {
+    local component=$1
+    set_state "installed_${component}" "false"
+}
+
+#==============================================================================
+# SYSTEM DETECTION
+#==============================================================================
+
+detect_system() {
+    # Detect OS
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_ID="$ID"
+        OS_VERSION="$VERSION_ID"
+        OS_NAME="$PRETTY_NAME"
+    else
+        error "Cannot detect Linux distribution"
+        error "This script requires Ubuntu or Debian-based Linux"
+        exit 1
+    fi
+    
+    # Verify compatible OS
+    if [[ "$OS_ID" != "ubuntu" && "$ID_LIKE" != *"ubuntu"* && "$OS_ID" != "debian" && "$ID_LIKE" != *"debian"* ]]; then
+        warning "This installer is optimized for Ubuntu/Debian"
+        warning "Detected: $OS_NAME"
+        echo ""
+        read -p "Continue anyway? (y/N): " -r
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Installation cancelled"
+            exit 1
+        fi
+    fi
+    
+    # Detect shell configuration file
+    # Check the actual default shell, not just current session
+    local user_shell=$(basename "$SHELL")
+    case "$user_shell" in
+        zsh)
+            SHELL_CONFIG="$HOME/.zshrc"
+            SHELL_TYPE="zsh"
+            ;;
+        bash)
+            SHELL_CONFIG="$HOME/.bashrc"
+            SHELL_TYPE="bash"
+            ;;
+        *)
+            SHELL_CONFIG="$HOME/.profile"
+            SHELL_TYPE="sh"
+            ;;
+    esac
+    
+    # Detect display system (X11 or Wayland)
+    if [ -n "$WAYLAND_DISPLAY" ]; then
+        DISPLAY_SYSTEM="wayland"
+    elif [ -n "$DISPLAY" ]; then
+        DISPLAY_SYSTEM="x11"
+    else
+        DISPLAY_SYSTEM="unknown"
+    fi
+    
+    # Store detection results
+    set_state "os_id" "$OS_ID"
+    set_state "os_version" "$OS_VERSION"
+    set_state "shell_type" "$SHELL_TYPE"
+    set_state "display_system" "$DISPLAY_SYSTEM"
+}
+
+#==============================================================================
+# DEPENDENCY MANAGEMENT
+#==============================================================================
+
+check_dependencies() {
+    local missing=()
+    
+    # Check essential commands
+    command -v curl >/dev/null 2>&1 || missing+=("curl")
+    command -v wget >/dev/null 2>&1 || missing+=("wget")
+    command -v git >/dev/null 2>&1 || missing+=("git")
+    command -v python3 >/dev/null 2>&1 || missing+=("python3")
+    
+    if [ ${#missing[@]} -gt 0 ]; then
+        log "Installing missing system dependencies: ${missing[*]}"
+        sudo apt update -qq
+        sudo apt install -y "${missing[@]}" || {
+            error "Failed to install dependencies"
+            exit 1
+        }
+        success "Dependencies installed"
+    fi
+}
+
+check_python_version() {
+    local python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
+    local major=$(echo "$python_version" | cut -d'.' -f1)
+    local minor=$(echo "$python_version" | cut -d'.' -f2)
+    
+    if [ "$major" -lt 3 ] || ([ "$major" -eq 3 ] && [ "$minor" -lt 10 ]); then
+        error "Python 3.10 or higher is required (found: $python_version)"
+        exit 1
+    fi
+    
+    success "Python version: $python_version"
+}
+
+#==============================================================================
+# INSTALLATION COMPONENTS
+#==============================================================================
+
+install_base_structure() {
+    if is_installed "base_structure"; then
+        return 0
+    fi
+    
+    log "Creating directory structure..."
+    
+    # Create all required directories
+    mkdir -p "$ASTRO_HOME"
+    mkdir -p "$ASTRO_ENV"
+    mkdir -p "$ASTRO_BIN"
+    mkdir -p "$ASTRO_DATA"/{samples,results}
+    mkdir -p "$ASTRO_CACHE"
+    mkdir -p "$ASTRO_SCRIPTS"
+    mkdir -p "$ASTRO_NOTEBOOKS"/{tutorials,projects,examples}
+    mkdir -p "$ASTRO_HOME"/projects/{learning,research}
+    
+    # Initialize log file
+    touch "$INSTALL_LOG"
+    echo "=== Astronomy Starter Kit Installation Log ===" >> "$INSTALL_LOG"
+    echo "Started: $(date)" >> "$INSTALL_LOG"
+    echo "System: $OS_NAME" >> "$INSTALL_LOG"
+    echo "" >> "$INSTALL_LOG"
+    
+    mark_installed "base_structure"
+    success "Directory structure created"
+}
+
+install_python_environment() {
+    if is_installed "python_env"; then
+        return 0
+    fi
+    
+    log "Setting up Python environment..."
+    log "This may take 5-10 minutes depending on your internet connection"
+    echo ""
+    
+    # Ensure python3-venv is installed (required on Ubuntu)
+    if ! dpkg -l python3-venv >/dev/null 2>&1; then
+        log "Installing python3-venv..."
+        sudo apt update -qq
+        sudo apt install -y python3-venv python3-dev python3-pip build-essential || {
+            error "Failed to install Python development packages"
+            exit 1
+        }
+    fi
+    
+    # Remove existing environment if corrupted
+    if [ -d "$ASTRO_ENV" ] && [ ! -f "$ASTRO_ENV/bin/activate" ]; then
+        warning "Removing corrupted environment..."
+        rm -rf "$ASTRO_ENV"
+    fi
+    
+    # Create virtual environment
+    log "Creating virtual environment..."
+    python3 -m venv "$ASTRO_ENV" || {
+        error "Failed to create virtual environment"
+        exit 1
+    }
+    
+    # Activate environment
+    source "$ASTRO_ENV/bin/activate"
+    
+    # Upgrade pip first
+    log "Upgrading pip..."
+    pip install --upgrade pip setuptools wheel --quiet || {
+        error "Failed to upgrade pip"
+        deactivate
+        exit 1
+    }
+    
+    # Install packages in groups for better error handling
+    log "Installing core scientific libraries (numpy, scipy, matplotlib, pandas)..."
+    pip install numpy scipy matplotlib pandas --quiet || {
+        error "Failed to install core scientific libraries"
+        deactivate
+        exit 1
+    }
+    
+    log "Installing Jupyter Lab..."
+    pip install jupyter jupyterlab ipywidgets ipykernel --quiet || {
+        error "Failed to install Jupyter"
+        deactivate
+        exit 1
+    }
+    
+    log "Installing astronomy libraries (astropy)..."
+    pip install astropy pytz python-dateutil --quiet || {
+        error "Failed to install astronomy libraries"
+        deactivate
+        exit 1
+    }
+    
+    log "Installing visualization tools (plotly, seaborn, bokeh)..."
+    pip install plotly seaborn bokeh --quiet || {
+        warning "Some visualization tools failed to install (non-critical)"
+    }
+    
+    # Register Jupyter kernel
+    log "Registering Jupyter kernel..."
+    python -m ipykernel install --user --name=astro --display-name="Astronomy Python" >/dev/null 2>&1 || {
+        warning "Failed to register Jupyter kernel (non-critical)"
+    }
+    
+    deactivate
+    
+    mark_installed "python_env"
+    success "Python environment ready"
+}
+
+install_astronomy_tools() {
+    if is_installed "astro_tools"; then
+        return 0
+    fi
+    
+    log "Installing astronomy applications..."
+    
+    # Install XWayland for GUI support on Wayland systems
+    if [ "$DISPLAY_SYSTEM" == "wayland" ]; then
+        log "Installing XWayland for GUI compatibility..."
+        sudo apt install -y xwayland >/dev/null 2>&1 || {
+            warning "XWayland installation failed (GUI tools may not work)"
+        }
+    fi
+    
+    # Install DS9 FITS viewer
+    if ! command -v ds9 >/dev/null 2>&1; then
+        log "Installing DS9 FITS image viewer..."
+        sudo apt install -y saods9 >/dev/null 2>&1 || {
+            warning "DS9 installation failed (optional tool)"
+        }
+    fi
+    
+    mark_installed "astro_tools"
+    success "Astronomy tools installed"
+}
+
+install_topcat() {
+    if is_installed "topcat"; then
+        return 0
+    fi
+    
+    log "Installing TOPCAT catalog analysis tool..."
+    
+    # Install Java (required for TOPCAT)
+    if ! command -v java >/dev/null 2>&1; then
+        log "Installing Java runtime..."
+        # Try OpenJDK 21 first (Ubuntu 24.04), fall back to 17 (Ubuntu 22.04)
+        if ! sudo apt install -y openjdk-21-jre >/dev/null 2>&1; then
+            log "OpenJDK 21 not available, trying OpenJDK 17..."
+            sudo apt install -y openjdk-17-jre >/dev/null 2>&1 || {
+                error "Failed to install Java"
+                return 1
+            }
+        fi
+    fi
+    
+    # Download TOPCAT if not cached
+    if [ ! -f "$ASTRO_CACHE/topcat-full.jar" ]; then
+        log "Downloading TOPCAT (this may take a few minutes)..."
+        wget -q --show-progress "$TOPCAT_URL" -O "$ASTRO_CACHE/topcat-full.jar" || {
+            error "Failed to download TOPCAT"
+            return 1
+        }
+    fi
+    
+    # Create TOPCAT launcher script
+    cat > "$ASTRO_BIN/topcat" << 'EOFTOPCAT'
+#!/bin/bash
+# TOPCAT Launcher - Astronomy Starter Kit
+# Handles both X11 and Wayland display systems
+
+# Set up display environment
+export DISPLAY="${DISPLAY:-:0}"
+
+# Wayland compatibility (for Ubuntu 22.04+ with Wayland)
+if [ -n "$WAYLAND_DISPLAY" ]; then
+    export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+    # Find Xwayland auth file
+    XAUTH_FILE=$(ls /run/user/$(id -u)/.mutter-Xwaylandauth* 2>/dev/null | head -1)
+    if [ -n "$XAUTH_FILE" ]; then
+        export XAUTHORITY="$XAUTH_FILE"
+    fi
+fi
+
+# Launch TOPCAT
+TOPCAT_JAR="$HOME/.astro/cache/topcat-full.jar"
+
+if [ ! -f "$TOPCAT_JAR" ]; then
+    echo "Error: TOPCAT not found at $TOPCAT_JAR"
+    echo "Run 'astro repair' to fix this"
+    exit 1
+fi
+
+# Run with appropriate Java options
+exec java -Djava.awt.headless=false \
+          -Dsun.java2d.xrender=false \
+          -jar "$TOPCAT_JAR" "$@"
+EOFTOPCAT
+    
+    chmod +x "$ASTRO_BIN/topcat"
+    
+    mark_installed "topcat"
+    success "TOPCAT installed"
+}
+
+setup_shell_integration() {
+    if is_installed "shell_config"; then
+        return 0
+    fi
+    
+    log "Configuring shell integration..."
+    
+    # Backup existing shell config
+    if [ -f "$SHELL_CONFIG" ]; then
+        local backup_file="${SHELL_CONFIG}.backup.astro.$(date +%Y%m%d_%H%M%S)"
+        cp "$SHELL_CONFIG" "$backup_file"
+        log "Backed up $SHELL_CONFIG to $backup_file"
+    fi
+    
+    # Remove any existing astro configuration blocks
+    if [ -f "$SHELL_CONFIG" ]; then
+        sed -i '/# ==== ASTRO ENVIRONMENT ====/,/# ==== END ASTRO ====/d' "$SHELL_CONFIG" 2>/dev/null || true
+    fi
+    
+    # Add new configuration
+    cat >> "$SHELL_CONFIG" << EOFSHELL
+
+# ==== ASTRO ENVIRONMENT ====
+# Astronomy Starter Kit - https://github.com/YOUR_USERNAME/astronomy-starter-kit
+# Added: $(date +%Y-%m-%d)
+
+# Environment paths
+export ASTRO_HOME="$ASTRO_HOME"
+export PATH="\$ASTRO_HOME/bin:\$PATH"
+
+# Quick activation alias
+alias astro-activate='source "\$ASTRO_HOME/env/bin/activate" && cd "\$ASTRO_HOME" && echo "🔭 Astronomy environment activated"'
+
+# Display configuration for GUI applications (X11/Wayland compatibility)
+export DISPLAY="\${DISPLAY:-:0}"
+if [ -n "\$WAYLAND_DISPLAY" ]; then
+    export XAUTHORITY="\$(ls /run/user/\$(id -u)/.mutter-Xwaylandauth* 2>/dev/null | head -1)"
+fi
+# ==== END ASTRO ====
+EOFSHELL
+    
+    mark_installed "shell_config"
+    success "Shell integration configured"
+}
+
+create_wrapper_scripts() {
+    if is_installed "wrappers"; then
+        return 0
+    fi
+    
+    log "Creating convenience scripts..."
+    
+    # Jupyter launcher
+    cat > "$ASTRO_BIN/astro-jupyter" << 'EOFJUPYTER'
+#!/bin/bash
+# Jupyter Lab Launcher - Astronomy Starter Kit
+source "$HOME/.astro/env/bin/activate"
+cd "$HOME/.astro/notebooks"
+echo "🔭 Launching Jupyter Lab..."
+echo "   Notebooks directory: $HOME/.astro/notebooks"
+exec jupyter lab
+EOFJUPYTER
+    
+    # Python launcher
+    cat > "$ASTRO_BIN/astro-python" << 'EOFPYTHON'
+#!/bin/bash
+# Python Launcher - Astronomy Starter Kit
+source "$HOME/.astro/env/bin/activate"
+exec python "$@"
+EOFPYTHON
+    
+    # DS9 launcher (with display fix)
+    cat > "$ASTRO_BIN/astro-ds9" << 'EOFDS9'
+#!/bin/bash
+# DS9 Launcher - Astronomy Starter Kit
+export DISPLAY="${DISPLAY:-:0}"
+if [ -n "$WAYLAND_DISPLAY" ]; then
+    XAUTH_FILE=$(ls /run/user/$(id -u)/.mutter-Xwaylandauth* 2>/dev/null | head -1)
+    [ -n "$XAUTH_FILE" ] && export XAUTHORITY="$XAUTH_FILE"
+fi
+exec ds9 "$@"
+EOFDS9
+    
+    # Make all scripts executable
+    chmod +x "$ASTRO_BIN"/astro-*
+    
+    mark_installed "wrappers"
+    success "Convenience scripts created"
+}
+
+create_readme() {
+    cat > "$ASTRO_HOME/README.md" << 'EOFREADME'
+# 🔭 Astronomy Starter Kit
+
+Your astronomy development environment is ready!
+
+## Quick Start
+
+```bash
+astro                  # Show available commands
+astro jupyter          # Launch Jupyter Lab
+astro topcat           # Launch TOPCAT catalog tool
+astro python           # Python with astronomy libraries
+astro-activate         # Activate Python environment manually
+```
+
+## Directory Structure
+
+```
+~/.astro/
+├── env/               # Python virtual environment
+├── bin/               # Launcher scripts
+├── data/              # Your data files
+│   ├── samples/       # Sample datasets
+│   └── results/       # Analysis results
+├── notebooks/         # Jupyter notebooks
+│   ├── tutorials/     # Learning materials
+│   ├── projects/      # Your projects
+│   └── examples/      # Example notebooks
+├── scripts/           # Custom Python scripts
+├── cache/             # Downloaded tools (TOPCAT, etc.)
+└── projects/          # Research projects
+```
+
+## Installed Tools
+
+- **Python Environment**: numpy, scipy, matplotlib, pandas, astropy
+- **Jupyter Lab**: Interactive notebook development
+- **TOPCAT**: Catalog and table analysis
+- **DS9**: FITS image viewer
+- **Plotly/Seaborn/Bokeh**: Data visualization
+
+## Useful Commands
+
+```bash
+astro status           # Check installation status
+astro doctor           # Diagnose problems
+astro repair           # Fix broken components
+astro update           # Update Python packages
+astro uninstall        # Remove everything
+```
+
+## Documentation
+
+- Project: https://github.com/YOUR_USERNAME/astronomy-starter-kit
+- Astropy: https://docs.astropy.org
+- TOPCAT: https://www.star.bris.ac.uk/~mbt/topcat/
+
+## Getting Help
+
+If you encounter issues, run:
+```bash
+astro doctor
+```
+
+For more help, visit:
+https://github.com/YOUR_USERNAME/astronomy-starter-kit/issues
+EOFREADME
+    
+    success "README created at $ASTRO_HOME/README.md"
+}
+
+#==============================================================================
+# FULL INSTALLATION
+#==============================================================================
+
+run_full_install() {
+    local start_time=$(date +%s)
+    
+    print_header "ASTRONOMY STARTER KIT - First Time Setup"
+    
+    echo -e "${BOLD}This will install:${NC}"
+    echo "  • Python scientific environment (numpy, scipy, matplotlib, pandas)"
+    echo "  • Astronomy libraries (astropy)"
+    echo "  • Jupyter Lab for interactive development"
+    echo "  • TOPCAT for catalog analysis"
+    echo "  • DS9 for FITS image viewing"
+    echo "  • Convenience launcher scripts"
+    echo ""
+    echo -e "${YELLOW}Installation location:${NC} $ASTRO_HOME"
+    echo -e "${YELLOW}Estimated time:${NC} 10-15 minutes"
+    echo -e "${YELLOW}Required disk space:${NC} ~2 GB"
+    echo ""
+    
+    read -p "Continue with installation? (Y/n): " -r
+    echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        echo "Installation cancelled"
+        exit 0
+    fi
+    
+    echo ""
+    print_divider
+    log "Starting installation..."
+    print_divider
+    echo ""
+    
+    # Run all installation steps
+    detect_system
+    check_dependencies
+    check_python_version
+    install_base_structure
+    install_python_environment
+    install_astronomy_tools
+    install_topcat
+    setup_shell_integration
+    create_wrapper_scripts
+    create_readme
+    
+    # Mark installation as complete
+    set_state "fully_installed" "true"
+    set_state "install_date" "$(date +%Y-%m-%d)"
+    set_state "install_version" "$VERSION"
+    
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+    
+    echo ""
+    print_divider
+    echo ""
+    print_header "INSTALLATION COMPLETE!"
+    
+    echo -e "${GREEN}✓ Installation completed in ${duration} seconds${NC}"
+    echo ""
+    echo -e "${BOLD}Next steps:${NC}"
+    echo ""
+    echo "1. ${YELLOW}Reload your shell:${NC}"
+    echo "   source $SHELL_CONFIG"
+    echo "   # Or close and reopen your terminal"
+    echo ""
+    echo "2. ${YELLOW}Start using the tools:${NC}"
+    echo "   astro                # Show command menu"
+    echo "   astro jupyter        # Launch Jupyter Lab"
+    echo "   astro topcat         # Launch TOPCAT"
+    echo "   astro-activate       # Activate Python environment"
+    echo ""
+    echo "3. ${YELLOW}Read the documentation:${NC}"
+    echo "   $ASTRO_HOME/README.md"
+    echo ""
+    echo -e "${CYAN}Happy exploring! 🔭✨${NC}"
+    echo ""
+}
+
+#==============================================================================
+# COMMAND HANDLERS
+#==============================================================================
+
+cmd_status() {
+    print_header "ASTRONOMY STARTER KIT - Status"
+    
+    if [ "$(get_state fully_installed)" == "true" ]; then
+        echo -e "${GREEN}✓ Environment installed${NC}"
+        echo ""
+        echo "  Version:      $(get_state install_version)"
+        echo "  Install date: $(get_state install_date)"
+        echo "  Location:     $ASTRO_HOME"
+        echo "  Shell:        $(get_state shell_type)"
+        echo "  Display:      $(get_state display_system)"
+        echo ""
+        
+        print_divider
+        echo ""
+        echo -e "${BOLD}Components:${NC}"
+        is_installed "base_structure" && echo -e "  ${GREEN}✓${NC} Directory structure" || echo -e "  ${RED}✗${NC} Directory structure"
+        is_installed "python_env" && echo -e "  ${GREEN}✓${NC} Python environment" || echo -e "  ${RED}✗${NC} Python environment"
+        is_installed "astro_tools" && echo -e "  ${GREEN}✓${NC} Astronomy tools (DS9)" || echo -e "  ${RED}✗${NC} Astronomy tools"
+        is_installed "topcat" && echo -e "  ${GREEN}✓${NC} TOPCAT" || echo -e "  ${RED}✗${NC} TOPCAT"
+        is_installed "shell_config" && echo -e "  ${GREEN}✓${NC} Shell configuration" || echo -e "  ${RED}✗${NC} Shell configuration"
+        is_installed "wrappers" && echo -e "  ${GREEN}✓${NC} Wrapper scripts" || echo -e "  ${RED}✗${NC} Wrapper scripts"
+        echo ""
+        
+        print_divider
+        echo ""
+        echo -e "${BOLD}Quick commands:${NC}"
+        echo "  astro jupyter      Launch Jupyter Lab"
+        echo "  astro topcat       Launch TOPCAT"
+        echo "  astro python       Launch Python"
+        echo "  astro-activate     Activate environment"
+        echo ""
+    else
+        echo -e "${YELLOW}⚠ Environment not fully installed${NC}"
+        echo ""
+        echo "Run 'astro' to complete installation"
+        echo ""
+    fi
+}
+
+cmd_doctor() {
+    print_header "ASTRONOMY STARTER KIT - Diagnostics"
+    
+    local issues=0
+    local warnings=0
+    
+    echo -e "${BOLD}Running health checks...${NC}"
+    echo ""
+    
+    # Check 1: Directory structure
+    if [ -d "$ASTRO_HOME" ]; then
+        success "ASTRO_HOME directory exists"
+    else
+        error "ASTRO_HOME directory missing"
+        issues=$((issues + 1))
+    fi
+    
+    # Check 2: Python environment
+    if [ -d "$ASTRO_ENV" ] && [ -f "$ASTRO_ENV/bin/activate" ]; then
+        success "Python environment exists"
+        
+        # Check core packages
+        source "$ASTRO_ENV/bin/activate"
+        if python -c "import numpy, matplotlib, astropy" 2>/dev/null; then
+            success "Core packages (numpy, matplotlib, astropy) OK"
+        else
+            error "Core packages missing or broken"
+            issues=$((issues + 1))
+        fi
+        deactivate
+    else
+        error "Python environment missing or corrupted"
+        issues=$((issues + 1))
+    fi
+    
+    # Check 3: TOPCAT
+    if [ -f "$ASTRO_CACHE/topcat-full.jar" ]; then
+        success "TOPCAT JAR file present"
+    else
+        warning "TOPCAT not downloaded"
+        warnings=$((warnings + 1))
+    fi
+    
+    # Check 4: Java (for TOPCAT)
+    if command -v java >/dev/null 2>&1; then
+        local java_version=$(java -version 2>&1 | head -1)
+        success "Java installed: $java_version"
+    else
+        warning "Java not installed (required for TOPCAT)"
+        warnings=$((warnings + 1))
+    fi
+    
+    # Check 5: Shell configuration
+    detect_system
+    if grep -q "ASTRO_HOME" "$SHELL_CONFIG" 2>/dev/null; then
+        success "Shell configuration present in $SHELL_CONFIG"
+    else
+        warning "Shell configuration missing"
+        warnings=$((warnings + 1))
+    fi
+    
+    # Check 6: Display system
+    if [ "$DISPLAY_SYSTEM" == "wayland" ]; then
+        info "Display: Wayland detected"
+        if command -v Xwayland >/dev/null 2>&1 || dpkg -l xwayland >/dev/null 2>&1; then
+            success "XWayland available for GUI compatibility"
+        else
+            warning "XWayland not installed (GUI tools may not work)"
+            warnings=$((warnings + 1))
+        fi
+    elif [ "$DISPLAY_SYSTEM" == "x11" ]; then
+        success "Display: X11 (native support)"
+    else
+        warning "Display system not detected"
+        warnings=$((warnings + 1))
+    fi
+    
+    # Summary
+    echo ""
+    print_divider
+    echo ""
+    
+    if [ $issues -eq 0 ] && [ $warnings -eq 0 ]; then
+        echo -e "${GREEN}${BOLD}✓ All checks passed!${NC}"
+        echo "  Your astronomy environment is healthy."
+    elif [ $issues -eq 0 ]; then
+        echo -e "${YELLOW}${BOLD}⚠ $warnings warning(s) found${NC}"
+        echo "  Environment is functional but some features may be limited."
+        echo "  Run 'astro repair' to fix optional components."
+    else
+        echo -e "${RED}${BOLD}✗ $issues issue(s) found${NC}"
+        echo "  Run 'astro repair' to attempt automatic fixes."
+    fi
+    echo ""
+}
+
+cmd_repair() {
+    print_header "ASTRONOMY STARTER KIT - Repair"
+    
+    echo -e "${BOLD}Attempting to repair environment...${NC}"
+    echo ""
+    
+    detect_system
+    
+    # Repair base structure
+    if [ ! -d "$ASTRO_HOME" ]; then
+        log "Recreating directory structure..."
+        mark_uninstalled "base_structure"
+        install_base_structure
+    fi
+    
+    # Repair Python environment
+    if [ ! -f "$ASTRO_ENV/bin/activate" ]; then
+        log "Recreating Python environment..."
+        rm -rf "$ASTRO_ENV" 2>/dev/null || true
+        mark_uninstalled "python_env"
+        install_python_environment
+    fi
+    
+    # Repair TOPCAT
+    if [ ! -f "$ASTRO_CACHE/topcat-full.jar" ]; then
+        log "Re-downloading TOPCAT..."
+        mark_uninstalled "topcat"
+        install_topcat
+    fi
+    
+    # Repair shell configuration
+    if ! grep -q "ASTRO_HOME" "$SHELL_CONFIG" 2>/dev/null; then
+        log "Restoring shell configuration..."
+        mark_uninstalled "shell_config"
+        setup_shell_integration
+    fi
+    
+    # Repair wrapper scripts
+    if [ ! -f "$ASTRO_BIN/astro-jupyter" ]; then
+        log "Recreating wrapper scripts..."
+        mark_uninstalled "wrappers"
+        create_wrapper_scripts
+    fi
+    
+    echo ""
+    success "Repair complete!"
+    echo ""
+    echo "Run 'astro doctor' to verify the repairs"
+    echo ""
+}
+
+cmd_jupyter() {
+    if ! is_installed "python_env"; then
+        error "Python environment not installed"
+        echo "Run 'astro' to complete installation first"
+        exit 1
+    fi
+    
+    echo -e "${CYAN}🔭 Launching Jupyter Lab...${NC}"
+    echo "   Notebooks: $ASTRO_NOTEBOOKS"
+    echo ""
+    
+    source "$ASTRO_ENV/bin/activate"
+    cd "$ASTRO_NOTEBOOKS"
+    exec jupyter lab
+}
+
+cmd_topcat() {
+    if [ ! -f "$ASTRO_CACHE/topcat-full.jar" ]; then
+        error "TOPCAT not installed"
+        echo "Run 'astro repair' to install TOPCAT"
+        exit 1
+    fi
+    
+    echo -e "${CYAN}🔭 Launching TOPCAT...${NC}"
+    exec "$ASTRO_BIN/topcat" "$@"
+}
+
+cmd_ds9() {
+    if ! command -v ds9 >/dev/null 2>&1; then
+        error "DS9 not installed"
+        echo "Install with: sudo apt install saods9"
+        exit 1
+    fi
+    
+    echo -e "${CYAN}🔭 Launching DS9...${NC}"
+    exec "$ASTRO_BIN/astro-ds9" "$@"
+}
+
+cmd_python() {
+    if ! is_installed "python_env"; then
+        error "Python environment not installed"
+        echo "Run 'astro' to complete installation first"
+        exit 1
+    fi
+    
+    source "$ASTRO_ENV/bin/activate"
+    exec python "$@"
+}
+
+cmd_update() {
+    if ! is_installed "python_env"; then
+        error "Python environment not installed"
+        exit 1
+    fi
+    
+    print_header "ASTRONOMY STARTER KIT - Update"
+    
+    log "Updating Python packages..."
+    
+    source "$ASTRO_ENV/bin/activate"
+    
+    pip install --upgrade pip setuptools wheel
+    pip install --upgrade numpy scipy matplotlib pandas
+    pip install --upgrade astropy
+    pip install --upgrade jupyter jupyterlab
+    pip install --upgrade plotly seaborn bokeh
+    
+    deactivate
+    
+    # Update TOPCAT
+    if [ -f "$ASTRO_CACHE/topcat-full.jar" ]; then
+        log "Checking for TOPCAT updates..."
+        local temp_file="/tmp/topcat-check.jar"
+        if wget -q "$TOPCAT_URL" -O "$temp_file" 2>/dev/null; then
+            local old_size=$(stat -c%s "$ASTRO_CACHE/topcat-full.jar" 2>/dev/null || echo "0")
+            local new_size=$(stat -c%s "$temp_file" 2>/dev/null || echo "0")
+            if [ "$new_size" != "$old_size" ]; then
+                mv "$temp_file" "$ASTRO_CACHE/topcat-full.jar"
+                success "TOPCAT updated"
+            else
+                rm -f "$temp_file"
+                info "TOPCAT is already up to date"
+            fi
+        fi
+    fi
+    
+    set_state "last_update" "$(date +%Y-%m-%d)"
+    
+    echo ""
+    success "Update complete!"
+    echo ""
+}
+
+cmd_uninstall() {
+    print_header "ASTRONOMY STARTER KIT - Uninstall"
+    
+    echo -e "${RED}${BOLD}WARNING: This will completely remove the astronomy environment${NC}"
+    echo ""
+    echo "The following will be deleted:"
+    echo "  • $ASTRO_HOME (all files and data)"
+    echo "  • Shell configuration entries"
+    echo "  • Jupyter kernel registration"
+    echo ""
+    echo -e "${YELLOW}Note: System packages (Java, DS9) will NOT be removed${NC}"
+    echo ""
+    
+    read -p "Type 'uninstall' to confirm: " -r
+    echo
+    
+    if [ "$REPLY" != "uninstall" ]; then
+        echo "Uninstall cancelled"
+        exit 0
+    fi
+    
+    echo ""
+    log "Starting uninstall..."
+    
+    # Remove Jupyter kernel
+    if command -v jupyter >/dev/null 2>&1; then
+        log "Removing Jupyter kernel..."
+        jupyter kernelspec uninstall astro -y 2>/dev/null || true
+    fi
+    
+    # Remove shell configuration
+    detect_system
+    if [ -f "$SHELL_CONFIG" ]; then
+        log "Removing shell configuration..."
+        sed -i '/# ==== ASTRO ENVIRONMENT ====/,/# ==== END ASTRO ====/d' "$SHELL_CONFIG" 2>/dev/null || true
+    fi
+    
+    # Remove the main directory
+    log "Removing $ASTRO_HOME..."
+    rm -rf "$ASTRO_HOME"
+    
+    echo ""
+    success "Astronomy Starter Kit has been uninstalled"
+    echo ""
+    echo "To complete removal, reload your shell:"
+    echo -e "  ${YELLOW}source $SHELL_CONFIG${NC}"
+    echo "  # Or close and reopen your terminal"
+    echo ""
+    echo "Thank you for using Astronomy Starter Kit! 🔭"
+    echo ""
+}
+
+cmd_help() {
+    print_header "ASTRONOMY STARTER KIT - Help"
+    
+    echo -e "${BOLD}Version:${NC} $VERSION"
+    echo ""
+    echo -e "${BOLD}Usage:${NC} astro [command] [options]"
+    echo ""
+    echo -e "${BOLD}Commands:${NC}"
+    echo ""
+    echo "  ${CYAN}Launch Tools:${NC}"
+    echo "    jupyter         Launch Jupyter Lab"
+    echo "    topcat          Launch TOPCAT catalog analyzer"
+    echo "    ds9             Launch DS9 FITS viewer"
+    echo "    python          Launch Python with astronomy environment"
+    echo ""
+    echo "  ${CYAN}Environment Management:${NC}"
+    echo "    status          Show installation status"
+    echo "    doctor          Check environment health"
+    echo "    repair          Fix broken components"
+    echo "    update          Update packages to latest versions"
+    echo "    uninstall       Remove the entire environment"
+    echo ""
+    echo "  ${CYAN}Help:${NC}"
+    echo "    help            Show this help message"
+    echo "    version         Show version information"
+    echo ""
+    echo -e "${BOLD}Aliases:${NC}"
+    echo "    astro-activate  Activate Python environment directly"
+    echo ""
+    echo -e "${BOLD}Examples:${NC}"
+    echo "    astro jupyter              # Start Jupyter Lab"
+    echo "    astro topcat catalog.fits  # Open catalog in TOPCAT"
+    echo "    astro python script.py     # Run script with astronomy Python"
+    echo ""
+    echo -e "${BOLD}Documentation:${NC}"
+    echo "    https://github.com/YOUR_USERNAME/astronomy-starter-kit"
+    echo ""
+}
+
+cmd_version() {
+    echo "Astronomy Starter Kit v$VERSION"
+    if [ "$(get_state fully_installed)" == "true" ]; then
+        echo "Installed: $(get_state install_date)"
+        echo "Location: $ASTRO_HOME"
+    fi
+}
+
+show_menu() {
+    print_header "ASTRONOMY STARTER KIT"
+    
+    echo -e "${BOLD}Quick Commands:${NC}"
+    echo ""
+    echo "  ${YELLOW}astro jupyter${NC}      Launch Jupyter Lab"
+    echo "  ${YELLOW}astro topcat${NC}       Launch TOPCAT catalog tool"
+    echo "  ${YELLOW}astro ds9${NC}          Launch DS9 FITS viewer"
+    echo "  ${YELLOW}astro python${NC}       Launch Python environment"
+    echo ""
+    print_divider
+    echo ""
+    echo -e "${BOLD}Management:${NC}"
+    echo ""
+    echo "  ${YELLOW}astro status${NC}       Show installation status"
+    echo "  ${YELLOW}astro doctor${NC}       Check environment health"
+    echo "  ${YELLOW}astro repair${NC}       Fix broken components"
+    echo "  ${YELLOW}astro update${NC}       Update packages"
+    echo "  ${YELLOW}astro uninstall${NC}    Remove environment"
+    echo "  ${YELLOW}astro help${NC}         Show detailed help"
+    echo ""
+    print_divider
+    echo ""
+    echo -e "${BOLD}Direct Activation:${NC}"
+    echo ""
+    echo "  ${YELLOW}astro-activate${NC}     Activate Python environment in current shell"
+    echo ""
+}
+
+#==============================================================================
+# MAIN ENTRY POINT
+#==============================================================================
+
+main() {
+    # Create home directory if it doesn't exist (for state file access)
+    mkdir -p "$ASTRO_HOME" 2>/dev/null || true
+    
+    # If not installed, run installation
+    if [ "$(get_state fully_installed)" != "true" ]; then
+        run_full_install
+        exit 0
+    fi
+    
+    # Parse command
+    case "${1:-}" in
+        jupyter)
+            shift
+            cmd_jupyter "$@"
+            ;;
+        topcat)
+            shift
+            cmd_topcat "$@"
+            ;;
+        ds9)
+            shift
+            cmd_ds9 "$@"
+            ;;
+        python)
+            shift
+            cmd_python "$@"
+            ;;
+        status)
+            cmd_status
+            ;;
+        doctor)
+            cmd_doctor
+            ;;
+        repair)
+            cmd_repair
+            ;;
+        update)
+            cmd_update
+            ;;
+        uninstall)
+            cmd_uninstall
+            ;;
+        help|--help|-h)
+            cmd_help
+            ;;
+        version|--version|-v)
+            cmd_version
+            ;;
+        "")
+            show_menu
+            ;;
+        *)
+            error "Unknown command: $1"
+            echo ""
+            echo "Run 'astro help' for available commands"
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function
+main "$@"
