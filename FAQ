@@ -1,0 +1,45 @@
+# Frequently Asked Questions
+
+## Installation
+
+### Q: How long does installation take?
+A: First-time setup takes 10-15 minutes. Subsequent launches are instant.
+
+### Q: Can I install without sudo?
+A: No, some system packages require sudo. The installer will ask when needed.
+
+### Q: Will this interfere with my existing Python?
+A: No! Everything is isolated in `~/.astro/`. Your system Python is untouched.
+
+## Usage
+
+### Q: How do I uninstall?
+A: Run `astro uninstall` - it removes everything cleanly.
+
+### Q: Can I have multiple profiles?
+A: Not yet, but it's planned for a future release.
+
+### Q: Does this work on Raspberry Pi?
+A: It should work on ARM64 Ubuntu, but isn't officially tested yet.
+
+## Troubleshooting
+
+### Q: TOPCAT won't launch
+A: See our [TOPCAT Troubleshooting Guide](TROUBLESHOOTING.md) for Wayland-specific issues.
+
+### Q: Jupyter Lab won't start
+A: Run `astro doctor` to diagnose. Usually fixed by `astro repair`.
+
+### Q: How do I update?
+A: Run `astro update` to update Python packages.
+
+## Advanced
+
+### Q: Where is everything installed?
+A: `~/.astro/` - all files are in your home directory.
+
+### Q: Can I customize the installation?
+A: Yes! The `astro` script is fully customizable.
+
+### Q: How do I contribute?
+A: See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
