@@ -4,7 +4,7 @@
 # Zero-configuration astronomy development environment
 #
 # Repository: https://github.com/RedChaosWolf92/astronomy-starter-kit
-# Version: 1.0.0
+# Version: 1.1.0
 # License: MIT
 #
 # Tested on: Ubuntu 22.04 LTS, Ubuntu 24.04 LTS
@@ -27,15 +27,41 @@
 #   astro help         # Show help
 #
 
-# Exit on error (but handle errors gracefully where needed)
-set -e
+#==============================================================================
+# ERROR HANDLING - Improved for better debugging
+#==============================================================================
+# Don't use set -e globally - handle errors explicitly for better feedback
+# set -e  # REMOVED - causes silent failures
+
+# Trap errors and provide useful feedback
+trap 'handle_error $? $LINENO "$BASH_COMMAND"' ERR
+
+handle_error() {
+    local exit_code=$1
+    local line_number=$2
+    local command="$3"
+    
+    # Only show error if it's a real failure (not from conditionals)
+    if [ $exit_code -ne 0 ]; then
+        echo ""
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${RED}ERROR: Command failed with exit code $exit_code${NC}"
+        echo -e "${RED}Line: $line_number${NC}"
+        echo -e "${RED}Command: $command${NC}"
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo "For troubleshooting, check the log file:"
+        echo "  $ASTRO_HOME/.install.log"
+        echo ""
+        echo "Or run: astro doctor"
+    fi
+}
 
 #==============================================================================
 # CONFIGURATION
 #==============================================================================
-
 # Version
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # Colors for output
 RED='\033[0;31m'
@@ -45,6 +71,7 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m' # No Color
 
 # Directory configuration
@@ -63,9 +90,137 @@ INSTALL_LOG="$ASTRO_HOME/.install.log"
 # URLs for downloads
 TOPCAT_URL="https://www.star.bris.ac.uk/~mbt/topcat/topcat-full.jar"
 
+# Installation progress tracking
+INSTALL_STEP=0
+INSTALL_TOTAL=8
+
+#==============================================================================
+# PROGRESS INDICATOR FUNCTIONS
+#==============================================================================
+
+# Spinner characters for visual feedback
+SPINNER_CHARS='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+
+# Show a spinner while a background process runs
+# Usage: run_with_spinner "message" command arg1 arg2 ...
+run_with_spinner() {
+    local message="$1"
+    shift
+    local cmd=("$@")
+    
+    # Start the command in background
+    "${cmd[@]}" >> "$INSTALL_LOG" 2>&1 &
+    local pid=$!
+    
+    local i=0
+    local spin_len=${#SPINNER_CHARS}
+    
+    # Show spinner while process runs
+    while kill -0 "$pid" 2>/dev/null; do
+        local char="${SPINNER_CHARS:$i:1}"
+        printf "\r   ${CYAN}%s${NC} %s" "$char" "$message"
+        i=$(( (i + 1) % spin_len ))
+        sleep 0.1
+    done
+    
+    # Get exit status
+    wait "$pid"
+    local exit_status=$?
+    
+    # Clear the spinner line
+    printf "\r%-60s\r" " "
+    
+    return $exit_status
+}
+
+# Show a simple progress indicator for quick operations
+show_progress() {
+    local message="$1"
+    printf "   ${CYAN}▸${NC} %s" "$message"
+}
+
+# Mark progress as complete
+mark_complete() {
+    local message="$1"
+    printf "\r   ${GREEN}✓${NC} %s\n" "$message"
+}
+
+# Mark progress as failed
+mark_failed() {
+    local message="$1"
+    printf "\r   ${RED}✗${NC} %s\n" "$message"
+}
+
+# Mark progress as warning
+mark_warning() {
+    local message="$1"
+    printf "\r   ${YELLOW}⚠${NC} %s\n" "$message"
+}
+
+# Show installation step header with progress bar
+show_step() {
+    local step_name="$1"
+    INSTALL_STEP=$((INSTALL_STEP + 1))
+    
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}Step $INSTALL_STEP of $INSTALL_TOTAL: $step_name${NC}"
+    show_progress_bar "$INSTALL_STEP" "$INSTALL_TOTAL"
+    echo ""
+}
+
+# Visual progress bar
+show_progress_bar() {
+    local current=$1
+    local total=$2
+    local width=50
+    local percent=$((current * 100 / total))
+    local filled=$((current * width / total))
+    local empty=$((width - filled))
+    
+    printf "   ${DIM}[${NC}"
+    printf "${GREEN}%${filled}s${NC}" | tr ' ' '█'
+    printf "${DIM}%${empty}s${NC}" | tr ' ' '░'
+    printf "${DIM}]${NC} %3d%%\n" "$percent"
+}
+
+# Show a substep with visual indicator
+show_substep() {
+    local message="$1"
+    echo -e "   ${CYAN}▸${NC} $message"
+}
+
+# Show substep completion
+complete_substep() {
+    local message="$1"
+    echo -e "   ${GREEN}✓${NC} $message"
+}
+
+# Show substep warning
+warn_substep() {
+    local message="$1"
+    echo -e "   ${YELLOW}⚠${NC} $message"
+}
+
+# Show substep failure
+fail_substep() {
+    local message="$1"
+    echo -e "   ${RED}✗${NC} $message"
+}
+
 #==============================================================================
 # UTILITY FUNCTIONS
 #==============================================================================
+
+# Initialize log file safely
+init_log() {
+    mkdir -p "$ASTRO_HOME" 2>/dev/null || true
+    touch "$INSTALL_LOG" 2>/dev/null || true
+    echo "" >> "$INSTALL_LOG"
+    echo "========================================" >> "$INSTALL_LOG"
+    echo "Session started: $(date)" >> "$INSTALL_LOG"
+    echo "========================================" >> "$INSTALL_LOG"
+}
 
 # Logging functions
 log() {
@@ -83,13 +238,13 @@ success() {
 error() {
     local msg="✗ $*"
     echo -e "${RED}${msg}${NC}"
-    [ -f "$INSTALL_LOG" ] && echo "$msg" >> "$INSTALL_LOG"
+    [ -f "$INSTALL_LOG" ] && echo "ERROR: $msg" >> "$INSTALL_LOG"
 }
 
 warning() {
     local msg="⚠ $*"
     echo -e "${YELLOW}${msg}${NC}"
-    [ -f "$INSTALL_LOG" ] && echo "$msg" >> "$INSTALL_LOG"
+    [ -f "$INSTALL_LOG" ] && echo "WARNING: $msg" >> "$INSTALL_LOG"
 }
 
 info() {
@@ -99,8 +254,9 @@ info() {
 # Print a header box
 print_header() {
     local title="$1"
+    echo ""
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
-    printf "${CYAN}║${NC}  %-62s ${CYAN}║${NC}\n" "$title"
+    printf "${CYAN}║${NC}  ${BOLD}%-62s${NC} ${CYAN}║${NC}\n" "$title"
     echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -126,10 +282,10 @@ get_state() {
 set_state() {
     local key=$1
     local value=$2
-    mkdir -p "$ASTRO_HOME"
+    mkdir -p "$ASTRO_HOME" 2>/dev/null || true
     
     if [ -f "$STATE_FILE" ]; then
-        # Remove existing key if present
+        # Remove existing key if present (handle errors gracefully)
         sed -i "/^${key}=/d" "$STATE_FILE" 2>/dev/null || true
     fi
     echo "${key}=${value}" >> "$STATE_FILE"
@@ -155,33 +311,63 @@ mark_uninstalled() {
 #==============================================================================
 
 detect_system() {
-    # Detect OS
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS_ID="$ID"
-        OS_VERSION="$VERSION_ID"
-        OS_NAME="$PRETTY_NAME"
-    else
-        error "Cannot detect Linux distribution"
+    show_substep "Reading system information..."
+    
+    # Detect OS with explicit error handling
+    if [ ! -f /etc/os-release ]; then
+        fail_substep "Cannot detect Linux distribution"
         error "This script requires Ubuntu or Debian-based Linux"
-        exit 1
+        error "File /etc/os-release not found"
+        return 1
     fi
     
+    # Source os-release safely
+    # shellcheck source=/dev/null
+    source /etc/os-release 2>/dev/null || {
+        fail_substep "Failed to read /etc/os-release"
+        return 1
+    }
+    
+    OS_ID="${ID:-unknown}"
+    OS_VERSION="${VERSION_ID:-unknown}"
+    OS_NAME="${PRETTY_NAME:-Unknown Linux}"
+    ID_LIKE="${ID_LIKE:-}"
+    
+    complete_substep "Detected: $OS_NAME"
+    
     # Verify compatible OS
-    if [[ "$OS_ID" != "ubuntu" && "$ID_LIKE" != *"ubuntu"* && "$OS_ID" != "debian" && "$ID_LIKE" != *"debian"* ]]; then
-        warning "This installer is optimized for Ubuntu/Debian"
-        warning "Detected: $OS_NAME"
+    show_substep "Checking OS compatibility..."
+    
+    local is_compatible=false
+    if [[ "$OS_ID" == "ubuntu" ]] || [[ "$OS_ID" == "debian" ]]; then
+        is_compatible=true
+    elif [[ "$ID_LIKE" == *"ubuntu"* ]] || [[ "$ID_LIKE" == *"debian"* ]]; then
+        is_compatible=true
+    fi
+    
+    if [ "$is_compatible" = false ]; then
+        warn_substep "This installer is optimized for Ubuntu/Debian"
         echo ""
-        read -p "Continue anyway? (y/N): " -r
+        echo -e "   ${YELLOW}Detected: $OS_NAME${NC}"
+        echo -e "   ${YELLOW}The installer may still work, but is not officially tested.${NC}"
+        echo ""
+        read -p "   Continue anyway? (y/N): " -r
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "Installation cancelled"
-            exit 1
+            echo ""
+            echo "   Installation cancelled by user"
+            return 1
         fi
+        echo ""
+    else
+        complete_substep "OS is compatible"
     fi
     
     # Detect shell configuration file
-    # Check the actual default shell, not just current session
-    local user_shell=$(basename "$SHELL")
+    show_substep "Detecting shell configuration..."
+    
+    local user_shell
+    user_shell=$(basename "${SHELL:-/bin/bash}")
+    
     case "$user_shell" in
         zsh)
             SHELL_CONFIG="$HOME/.zshrc"
@@ -197,20 +383,31 @@ detect_system() {
             ;;
     esac
     
+    complete_substep "Shell: $SHELL_TYPE ($SHELL_CONFIG)"
+    
     # Detect display system (X11 or Wayland)
-    if [ -n "$WAYLAND_DISPLAY" ]; then
+    show_substep "Detecting display system..."
+    
+    if [ -n "${WAYLAND_DISPLAY:-}" ]; then
         DISPLAY_SYSTEM="wayland"
-    elif [ -n "$DISPLAY" ]; then
+        complete_substep "Display: Wayland"
+    elif [ -n "${DISPLAY:-}" ]; then
         DISPLAY_SYSTEM="x11"
+        complete_substep "Display: X11"
     else
         DISPLAY_SYSTEM="unknown"
+        warn_substep "Display: Not detected (headless/SSH session?)"
     fi
     
     # Store detection results
     set_state "os_id" "$OS_ID"
     set_state "os_version" "$OS_VERSION"
+    set_state "os_name" "$OS_NAME"
     set_state "shell_type" "$SHELL_TYPE"
+    set_state "shell_config" "$SHELL_CONFIG"
     set_state "display_system" "$DISPLAY_SYSTEM"
+    
+    return 0
 }
 
 #==============================================================================
@@ -220,34 +417,87 @@ detect_system() {
 check_dependencies() {
     local missing=()
     
-    # Check essential commands
-    command -v curl >/dev/null 2>&1 || missing+=("curl")
-    command -v wget >/dev/null 2>&1 || missing+=("wget")
-    command -v git >/dev/null 2>&1 || missing+=("git")
-    command -v python3 >/dev/null 2>&1 || missing+=("python3")
+    show_substep "Checking for curl..."
+    if command -v curl >/dev/null 2>&1; then
+        complete_substep "curl: installed"
+    else
+        warn_substep "curl: missing"
+        missing+=("curl")
+    fi
+    
+    show_substep "Checking for wget..."
+    if command -v wget >/dev/null 2>&1; then
+        complete_substep "wget: installed"
+    else
+        warn_substep "wget: missing"
+        missing+=("wget")
+    fi
+    
+    show_substep "Checking for git..."
+    if command -v git >/dev/null 2>&1; then
+        complete_substep "git: installed"
+    else
+        warn_substep "git: missing"
+        missing+=("git")
+    fi
+    
+    show_substep "Checking for python3..."
+    if command -v python3 >/dev/null 2>&1; then
+        complete_substep "python3: installed"
+    else
+        warn_substep "python3: missing"
+        missing+=("python3")
+    fi
     
     if [ ${#missing[@]} -gt 0 ]; then
-        log "Installing missing system dependencies: ${missing[*]}"
-        sudo apt update -qq
-        sudo apt install -y "${missing[@]}" || {
-            error "Failed to install dependencies"
-            exit 1
-        }
-        success "Dependencies installed"
+        echo ""
+        show_substep "Installing missing dependencies: ${missing[*]}"
+        
+        # Update package list
+        if ! sudo apt update -qq >> "$INSTALL_LOG" 2>&1; then
+            fail_substep "Failed to update package list"
+            error "Please run 'sudo apt update' manually and try again"
+            return 1
+        fi
+        
+        # Install missing packages
+        if ! sudo apt install -y "${missing[@]}" >> "$INSTALL_LOG" 2>&1; then
+            fail_substep "Failed to install dependencies"
+            error "Please install these packages manually: ${missing[*]}"
+            return 1
+        fi
+        
+        complete_substep "Dependencies installed successfully"
     fi
+    
+    return 0
 }
 
 check_python_version() {
-    local python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
-    local major=$(echo "$python_version" | cut -d'.' -f1)
-    local minor=$(echo "$python_version" | cut -d'.' -f2)
+    show_substep "Checking Python version..."
     
-    if [ "$major" -lt 3 ] || ([ "$major" -eq 3 ] && [ "$minor" -lt 10 ]); then
-        error "Python 3.10 or higher is required (found: $python_version)"
-        exit 1
+    local python_version
+    python_version=$(python3 --version 2>&1 | cut -d' ' -f2) || {
+        fail_substep "Could not determine Python version"
+        return 1
+    }
+    
+    local major minor
+    major=$(echo "$python_version" | cut -d'.' -f1)
+    minor=$(echo "$python_version" | cut -d'.' -f2)
+    
+    if [ "$major" -lt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -lt 10 ]; }; then
+        fail_substep "Python $python_version found (need 3.10+)"
+        error "Python 3.10 or higher is required"
+        error "Current version: $python_version"
+        echo ""
+        echo "To upgrade Python on Ubuntu:"
+        echo "  sudo apt install python3.10"
+        return 1
     fi
     
-    success "Python version: $python_version"
+    complete_substep "Python $python_version (meets requirement ≥3.10)"
+    return 0
 }
 
 #==============================================================================
@@ -256,171 +506,242 @@ check_python_version() {
 
 install_base_structure() {
     if is_installed "base_structure"; then
+        complete_substep "Directory structure already exists"
         return 0
     fi
     
-    log "Creating directory structure..."
+    show_substep "Creating directory structure..."
     
     # Create all required directories
-    mkdir -p "$ASTRO_HOME"
-    mkdir -p "$ASTRO_ENV"
-    mkdir -p "$ASTRO_BIN"
-    mkdir -p "$ASTRO_DATA"/{samples,results}
-    mkdir -p "$ASTRO_CACHE"
-    mkdir -p "$ASTRO_SCRIPTS"
-    mkdir -p "$ASTRO_NOTEBOOKS"/{tutorials,projects,examples}
-    mkdir -p "$ASTRO_HOME"/projects/{learning,research}
+    local dirs=(
+        "$ASTRO_HOME"
+        "$ASTRO_ENV"
+        "$ASTRO_BIN"
+        "$ASTRO_DATA/samples"
+        "$ASTRO_DATA/results"
+        "$ASTRO_CACHE"
+        "$ASTRO_SCRIPTS"
+        "$ASTRO_NOTEBOOKS/tutorials"
+        "$ASTRO_NOTEBOOKS/projects"
+        "$ASTRO_NOTEBOOKS/examples"
+        "$ASTRO_HOME/projects/learning"
+        "$ASTRO_HOME/projects/research"
+    )
     
-    # Initialize log file
-    touch "$INSTALL_LOG"
-    echo "=== Astronomy Starter Kit Installation Log ===" >> "$INSTALL_LOG"
-    echo "Started: $(date)" >> "$INSTALL_LOG"
-    echo "System: $OS_NAME" >> "$INSTALL_LOG"
-    echo "" >> "$INSTALL_LOG"
+    for dir in "${dirs[@]}"; do
+        if ! mkdir -p "$dir" 2>>"$INSTALL_LOG"; then
+            fail_substep "Failed to create $dir"
+            return 1
+        fi
+    done
+    
+    # Initialize log file header
+    {
+        echo "=== Astronomy Starter Kit Installation Log ==="
+        echo "Started: $(date)"
+        echo "System: ${OS_NAME:-Unknown}"
+        echo "Shell: ${SHELL_TYPE:-Unknown}"
+        echo "Display: ${DISPLAY_SYSTEM:-Unknown}"
+        echo ""
+    } >> "$INSTALL_LOG"
     
     mark_installed "base_structure"
-    success "Directory structure created"
+    complete_substep "Directory structure created"
+    return 0
 }
 
 install_python_environment() {
     if is_installed "python_env"; then
+        complete_substep "Python environment already installed"
         return 0
     fi
     
-    log "Setting up Python environment..."
-    log "This may take 5-10 minutes depending on your internet connection"
+    echo ""
+    echo -e "   ${YELLOW}Note: This step takes 5-10 minutes depending on your internet speed${NC}"
     echo ""
     
     # Ensure python3-venv is installed (required on Ubuntu)
+    show_substep "Checking python3-venv..."
     if ! dpkg -l python3-venv >/dev/null 2>&1; then
-        log "Installing python3-venv..."
-        sudo apt update -qq
-        sudo apt install -y python3-venv python3-dev python3-pip build-essential || {
-            error "Failed to install Python development packages"
-            exit 1
-        }
+        show_substep "Installing python3-venv and build tools..."
+        
+        if ! sudo apt update -qq >> "$INSTALL_LOG" 2>&1; then
+            fail_substep "Failed to update package list"
+            return 1
+        fi
+        
+        if ! sudo apt install -y python3-venv python3-dev python3-pip build-essential >> "$INSTALL_LOG" 2>&1; then
+            fail_substep "Failed to install Python development packages"
+            return 1
+        fi
+        complete_substep "Python development packages installed"
+    else
+        complete_substep "python3-venv already installed"
     fi
     
     # Remove existing environment if corrupted
     if [ -d "$ASTRO_ENV" ] && [ ! -f "$ASTRO_ENV/bin/activate" ]; then
-        warning "Removing corrupted environment..."
+        show_substep "Removing corrupted environment..."
         rm -rf "$ASTRO_ENV"
+        complete_substep "Corrupted environment removed"
     fi
     
     # Create virtual environment
-    log "Creating virtual environment..."
-    python3 -m venv "$ASTRO_ENV" || {
-        error "Failed to create virtual environment"
-        exit 1
-    }
+    show_substep "Creating virtual environment..."
+    if ! python3 -m venv "$ASTRO_ENV" >> "$INSTALL_LOG" 2>&1; then
+        fail_substep "Failed to create virtual environment"
+        error "Try running: python3 -m venv $ASTRO_ENV"
+        return 1
+    fi
+    complete_substep "Virtual environment created"
     
     # Activate environment
-    source "$ASTRO_ENV/bin/activate"
+    # shellcheck source=/dev/null
+    source "$ASTRO_ENV/bin/activate" || {
+        fail_substep "Failed to activate virtual environment"
+        return 1
+    }
     
     # Upgrade pip first
-    log "Upgrading pip..."
-    pip install --upgrade pip setuptools wheel --quiet || {
-        error "Failed to upgrade pip"
+    show_substep "Upgrading pip, setuptools, wheel..."
+    if run_with_spinner "Upgrading pip" pip install --upgrade pip setuptools wheel; then
+        complete_substep "pip, setuptools, wheel upgraded"
+    else
+        fail_substep "Failed to upgrade pip"
         deactivate
-        exit 1
-    }
+        return 1
+    fi
     
-    # Install packages in groups for better error handling
-    log "Installing core scientific libraries (numpy, scipy, matplotlib, pandas)..."
-    pip install numpy scipy matplotlib pandas --quiet || {
-        error "Failed to install core scientific libraries"
+    # Install packages in groups with visual feedback
+    show_substep "Installing numpy, scipy, matplotlib, pandas..."
+    if run_with_spinner "Installing core scientific libraries" pip install numpy scipy matplotlib pandas; then
+        complete_substep "Core scientific libraries installed"
+    else
+        fail_substep "Failed to install core scientific libraries"
         deactivate
-        exit 1
-    }
+        return 1
+    fi
     
-    log "Installing Jupyter Lab..."
-    pip install jupyter jupyterlab ipywidgets ipykernel --quiet || {
-        error "Failed to install Jupyter"
+    show_substep "Installing Jupyter Lab..."
+    if run_with_spinner "Installing Jupyter" pip install jupyter jupyterlab ipywidgets ipykernel; then
+        complete_substep "Jupyter Lab installed"
+    else
+        fail_substep "Failed to install Jupyter"
         deactivate
-        exit 1
-    }
+        return 1
+    fi
     
-    log "Installing astronomy libraries (astropy)..."
-    pip install astropy pytz python-dateutil --quiet || {
-        error "Failed to install astronomy libraries"
+    show_substep "Installing astropy..."
+    if run_with_spinner "Installing astronomy libraries" pip install astropy pytz python-dateutil; then
+        complete_substep "Astropy installed"
+    else
+        fail_substep "Failed to install astronomy libraries"
         deactivate
-        exit 1
-    }
+        return 1
+    fi
     
-    log "Installing visualization tools (plotly, seaborn, bokeh)..."
-    pip install plotly seaborn bokeh --quiet || {
-        warning "Some visualization tools failed to install (non-critical)"
-    }
+    show_substep "Installing visualization tools (plotly, seaborn, bokeh)..."
+    if run_with_spinner "Installing visualization tools" pip install plotly seaborn bokeh; then
+        complete_substep "Visualization tools installed"
+    else
+        warn_substep "Some visualization tools failed (non-critical)"
+    fi
     
     # Register Jupyter kernel
-    log "Registering Jupyter kernel..."
-    python -m ipykernel install --user --name=astro --display-name="Astronomy Python" >/dev/null 2>&1 || {
-        warning "Failed to register Jupyter kernel (non-critical)"
-    }
+    show_substep "Registering Jupyter kernel..."
+    if python -m ipykernel install --user --name=astro --display-name="Astronomy Python" >> "$INSTALL_LOG" 2>&1; then
+        complete_substep "Jupyter kernel registered"
+    else
+        warn_substep "Jupyter kernel registration failed (non-critical)"
+    fi
     
     deactivate
     
     mark_installed "python_env"
-    success "Python environment ready"
+    return 0
 }
 
 install_astronomy_tools() {
     if is_installed "astro_tools"; then
+        complete_substep "Astronomy tools already installed"
         return 0
     fi
     
-    log "Installing astronomy applications..."
-    
     # Install XWayland for GUI support on Wayland systems
-    if [ "$DISPLAY_SYSTEM" == "wayland" ]; then
-        log "Installing XWayland for GUI compatibility..."
-        sudo apt install -y xwayland >/dev/null 2>&1 || {
-            warning "XWayland installation failed (GUI tools may not work)"
-        }
+    if [ "${DISPLAY_SYSTEM:-}" == "wayland" ]; then
+        show_substep "Installing XWayland for GUI compatibility..."
+        if sudo apt install -y xwayland >> "$INSTALL_LOG" 2>&1; then
+            complete_substep "XWayland installed"
+        else
+            warn_substep "XWayland installation failed (GUI tools may have issues)"
+        fi
     fi
     
     # Install DS9 FITS viewer
-    if ! command -v ds9 >/dev/null 2>&1; then
-        log "Installing DS9 FITS image viewer..."
-        sudo apt install -y saods9 >/dev/null 2>&1 || {
-            warning "DS9 installation failed (optional tool)"
-        }
+    show_substep "Checking for DS9..."
+    if command -v ds9 >/dev/null 2>&1; then
+        complete_substep "DS9 already installed"
+    else
+        show_substep "Installing DS9 FITS image viewer..."
+        if sudo apt install -y saods9 >> "$INSTALL_LOG" 2>&1; then
+            complete_substep "DS9 installed"
+        else
+            warn_substep "DS9 installation failed (optional tool)"
+        fi
     fi
     
     mark_installed "astro_tools"
-    success "Astronomy tools installed"
+    return 0
 }
 
 install_topcat() {
     if is_installed "topcat"; then
+        complete_substep "TOPCAT already installed"
         return 0
     fi
     
-    log "Installing TOPCAT catalog analysis tool..."
-    
     # Install Java (required for TOPCAT)
-    if ! command -v java >/dev/null 2>&1; then
-        log "Installing Java runtime..."
+    show_substep "Checking for Java..."
+    if command -v java >/dev/null 2>&1; then
+        local java_version
+        java_version=$(java -version 2>&1 | head -1)
+        complete_substep "Java found: $java_version"
+    else
+        show_substep "Installing Java runtime..."
         # Try OpenJDK 21 first (Ubuntu 24.04), fall back to 17 (Ubuntu 22.04)
-        if ! sudo apt install -y openjdk-21-jre >/dev/null 2>&1; then
-            log "OpenJDK 21 not available, trying OpenJDK 17..."
-            sudo apt install -y openjdk-17-jre >/dev/null 2>&1 || {
-                error "Failed to install Java"
-                return 1
-            }
+        if sudo apt install -y openjdk-21-jre >> "$INSTALL_LOG" 2>&1; then
+            complete_substep "OpenJDK 21 installed"
+        elif sudo apt install -y openjdk-17-jre >> "$INSTALL_LOG" 2>&1; then
+            complete_substep "OpenJDK 17 installed"
+        else
+            fail_substep "Failed to install Java"
+            error "TOPCAT requires Java. Install manually with: sudo apt install default-jre"
+            return 1
         fi
     fi
     
     # Download TOPCAT if not cached
     if [ ! -f "$ASTRO_CACHE/topcat-full.jar" ]; then
-        log "Downloading TOPCAT (this may take a few minutes)..."
-        wget -q --show-progress "$TOPCAT_URL" -O "$ASTRO_CACHE/topcat-full.jar" || {
-            error "Failed to download TOPCAT"
+        show_substep "Downloading TOPCAT (~50MB)..."
+        echo ""
+        
+        # Use wget with progress bar
+        if wget --progress=bar:force:noscroll "$TOPCAT_URL" -O "$ASTRO_CACHE/topcat-full.jar" 2>&1 | \
+           grep --line-buffered "%" | \
+           sed -u -e "s/^/   /" ; then
+            echo ""
+            complete_substep "TOPCAT downloaded"
+        else
+            fail_substep "Failed to download TOPCAT"
+            rm -f "$ASTRO_CACHE/topcat-full.jar"
             return 1
-        }
+        fi
+    else
+        complete_substep "TOPCAT already cached"
     fi
     
     # Create TOPCAT launcher script
+    show_substep "Creating TOPCAT launcher..."
     cat > "$ASTRO_BIN/topcat" << 'EOFTOPCAT'
 #!/bin/bash
 # TOPCAT Launcher - Astronomy Starter Kit
@@ -457,29 +778,36 @@ EOFTOPCAT
     chmod +x "$ASTRO_BIN/topcat"
     
     mark_installed "topcat"
-    success "TOPCAT installed"
+    complete_substep "TOPCAT launcher created"
+    return 0
 }
 
 setup_shell_integration() {
     if is_installed "shell_config"; then
+        complete_substep "Shell integration already configured"
         return 0
     fi
     
-    log "Configuring shell integration..."
-    
     # Backup existing shell config
+    show_substep "Backing up shell configuration..."
     if [ -f "$SHELL_CONFIG" ]; then
         local backup_file="${SHELL_CONFIG}.backup.astro.$(date +%Y%m%d_%H%M%S)"
-        cp "$SHELL_CONFIG" "$backup_file"
-        log "Backed up $SHELL_CONFIG to $backup_file"
+        if cp "$SHELL_CONFIG" "$backup_file" 2>>"$INSTALL_LOG"; then
+            complete_substep "Backed up to $backup_file"
+        else
+            warn_substep "Could not create backup (continuing anyway)"
+        fi
     fi
     
     # Remove any existing astro configuration blocks
+    show_substep "Removing old configuration (if any)..."
     if [ -f "$SHELL_CONFIG" ]; then
         sed -i '/# ==== ASTRO ENVIRONMENT ====/,/# ==== END ASTRO ====/d' "$SHELL_CONFIG" 2>/dev/null || true
     fi
+    complete_substep "Old configuration removed"
     
     # Add new configuration
+    show_substep "Adding new shell configuration..."
     cat >> "$SHELL_CONFIG" << EOFSHELL
 
 # ==== ASTRO ENVIRONMENT ====
@@ -498,59 +826,78 @@ export DISPLAY="\${DISPLAY:-:0}"
 if [ -n "\$WAYLAND_DISPLAY" ]; then
     export XAUTHORITY="\$(ls /run/user/\$(id -u)/.mutter-Xwaylandauth* 2>/dev/null | head -1)"
 fi
+
 # ==== END ASTRO ====
 EOFSHELL
     
     mark_installed "shell_config"
-    success "Shell integration configured"
+    complete_substep "Shell configuration added to $SHELL_CONFIG"
+    return 0
 }
 
 create_wrapper_scripts() {
     if is_installed "wrappers"; then
+        complete_substep "Wrapper scripts already created"
         return 0
     fi
     
-    log "Creating convenience scripts..."
-    
     # Jupyter launcher
+    show_substep "Creating Jupyter launcher..."
     cat > "$ASTRO_BIN/astro-jupyter" << 'EOFJUPYTER'
 #!/bin/bash
 # Jupyter Lab Launcher - Astronomy Starter Kit
+
 source "$HOME/.astro/env/bin/activate"
 cd "$HOME/.astro/notebooks"
+
 echo "🔭 Launching Jupyter Lab..."
 echo "   Notebooks directory: $HOME/.astro/notebooks"
+
 exec jupyter lab
 EOFJUPYTER
+    complete_substep "Jupyter launcher created"
     
     # Python launcher
+    show_substep "Creating Python launcher..."
     cat > "$ASTRO_BIN/astro-python" << 'EOFPYTHON'
 #!/bin/bash
 # Python Launcher - Astronomy Starter Kit
+
 source "$HOME/.astro/env/bin/activate"
 exec python "$@"
 EOFPYTHON
+    complete_substep "Python launcher created"
     
     # DS9 launcher (with display fix)
+    show_substep "Creating DS9 launcher..."
     cat > "$ASTRO_BIN/astro-ds9" << 'EOFDS9'
 #!/bin/bash
 # DS9 Launcher - Astronomy Starter Kit
+
 export DISPLAY="${DISPLAY:-:0}"
+
 if [ -n "$WAYLAND_DISPLAY" ]; then
     XAUTH_FILE=$(ls /run/user/$(id -u)/.mutter-Xwaylandauth* 2>/dev/null | head -1)
     [ -n "$XAUTH_FILE" ] && export XAUTHORITY="$XAUTH_FILE"
 fi
+
 exec ds9 "$@"
 EOFDS9
+    complete_substep "DS9 launcher created"
     
     # Make all scripts executable
-    chmod +x "$ASTRO_BIN"/astro-*
+    show_substep "Setting executable permissions..."
+    chmod +x "$ASTRO_BIN"/astro-* 2>>"$INSTALL_LOG"
+    chmod +x "$ASTRO_BIN"/topcat 2>>"$INSTALL_LOG" || true
+    complete_substep "Permissions set"
     
     mark_installed "wrappers"
-    success "Convenience scripts created"
+    return 0
 }
 
 create_readme() {
+    show_substep "Creating README..."
+    
     cat > "$ASTRO_HOME/README.md" << 'EOFREADME'
 # 🔭 Astronomy Starter Kit
 
@@ -619,7 +966,8 @@ For more help, visit:
 https://github.com/RedChaosWolf92/astronomy-starter-kit/issues
 EOFREADME
     
-    success "README created at $ASTRO_HOME/README.md"
+    complete_substep "README created at $ASTRO_HOME/README.md"
+    return 0
 }
 
 #==============================================================================
@@ -627,7 +975,11 @@ EOFREADME
 #==============================================================================
 
 run_full_install() {
-    local start_time=$(date +%s)
+    local start_time
+    start_time=$(date +%s)
+    
+    # Initialize logging
+    init_log
     
     print_header "ASTRONOMY STARTER KIT - First Time Setup"
     
@@ -652,21 +1004,71 @@ run_full_install() {
     fi
     
     echo ""
-    print_divider
-    log "Starting installation..."
-    print_divider
+    echo -e "${GREEN}${BOLD}🚀 Starting installation...${NC}"
     echo ""
+    echo -e "${DIM}Progress will be shown for each step.${NC}"
+    echo -e "${DIM}Full log: $INSTALL_LOG${NC}"
     
-    # Run all installation steps
-    detect_system
-    check_dependencies
-    check_python_version
-    install_base_structure
-    install_python_environment
-    install_astronomy_tools
-    install_topcat
-    setup_shell_integration
-    create_wrapper_scripts
+    # Reset step counter
+    INSTALL_STEP=0
+    
+    # Step 1: Detect system
+    show_step "Detecting system configuration"
+    if ! detect_system; then
+        error "System detection failed. Check the log: $INSTALL_LOG"
+        exit 1
+    fi
+    
+    # Step 2: Check dependencies
+    show_step "Checking and installing dependencies"
+    if ! check_dependencies; then
+        error "Dependency check failed. Check the log: $INSTALL_LOG"
+        exit 1
+    fi
+    if ! check_python_version; then
+        error "Python version check failed."
+        exit 1
+    fi
+    
+    # Step 3: Create directory structure
+    show_step "Creating directory structure"
+    if ! install_base_structure; then
+        error "Failed to create directories. Check the log: $INSTALL_LOG"
+        exit 1
+    fi
+    
+    # Step 4: Python environment (longest step)
+    show_step "Setting up Python environment"
+    if ! install_python_environment; then
+        error "Python environment setup failed. Check the log: $INSTALL_LOG"
+        exit 1
+    fi
+    
+    # Step 5: Astronomy tools
+    show_step "Installing astronomy tools"
+    if ! install_astronomy_tools; then
+        warning "Some astronomy tools failed to install (continuing)"
+    fi
+    
+    # Step 6: TOPCAT
+    show_step "Installing TOPCAT"
+    if ! install_topcat; then
+        warning "TOPCAT installation failed (can be installed later with 'astro repair')"
+    fi
+    
+    # Step 7: Shell integration
+    show_step "Configuring shell integration"
+    if ! setup_shell_integration; then
+        error "Shell configuration failed. Check the log: $INSTALL_LOG"
+        exit 1
+    fi
+    
+    # Step 8: Wrapper scripts and README
+    show_step "Creating launcher scripts"
+    if ! create_wrapper_scripts; then
+        error "Failed to create wrapper scripts. Check the log: $INSTALL_LOG"
+        exit 1
+    fi
     create_readme
     
     # Mark installation as complete
@@ -674,21 +1076,25 @@ run_full_install() {
     set_state "install_date" "$(date +%Y-%m-%d)"
     set_state "install_version" "$VERSION"
     
-    local end_time=$(date +%s)
+    local end_time
+    end_time=$(date +%s)
     local duration=$((end_time - start_time))
+    local minutes=$((duration / 60))
+    local seconds=$((duration % 60))
     
+    echo ""
+    echo ""
+    print_header "✨ INSTALLATION COMPLETE!"
+    
+    echo -e "${GREEN}${BOLD}✓ Installation completed in ${minutes}m ${seconds}s${NC}"
     echo ""
     print_divider
-    echo ""
-    print_header "INSTALLATION COMPLETE!"
-    
-    echo -e "${GREEN}✓ Installation completed in ${duration} seconds${NC}"
     echo ""
     echo -e "${BOLD}Next steps:${NC}"
     echo ""
     echo "1. ${YELLOW}Reload your shell:${NC}"
     echo "   source $SHELL_CONFIG"
-    echo "   # Or close and reopen your terminal"
+    echo "   ${DIM}# Or close and reopen your terminal${NC}"
     echo ""
     echo "2. ${YELLOW}Start using the tools:${NC}"
     echo "   astro                # Show command menu"
@@ -699,7 +1105,9 @@ run_full_install() {
     echo "3. ${YELLOW}Read the documentation:${NC}"
     echo "   $ASTRO_HOME/README.md"
     echo ""
-    echo -e "${CYAN}Happy exploring! 🔭✨${NC}"
+    print_divider
+    echo ""
+    echo -e "${CYAN}${BOLD}Happy exploring! 🔭✨${NC}"
     echo ""
 }
 
@@ -711,7 +1119,7 @@ cmd_status() {
     print_header "ASTRONOMY STARTER KIT - Status"
     
     if [ "$(get_state fully_installed)" == "true" ]; then
-        echo -e "${GREEN}✓ Environment installed${NC}"
+        echo -e "${GREEN}${BOLD}✓ Environment installed${NC}"
         echo ""
         echo "  Version:      $(get_state install_version)"
         echo "  Install date: $(get_state install_date)"
@@ -757,70 +1165,87 @@ cmd_doctor() {
     echo ""
     
     # Check 1: Directory structure
+    show_substep "Checking ASTRO_HOME directory..."
     if [ -d "$ASTRO_HOME" ]; then
-        success "ASTRO_HOME directory exists"
+        complete_substep "ASTRO_HOME directory exists"
     else
-        error "ASTRO_HOME directory missing"
+        fail_substep "ASTRO_HOME directory missing"
         issues=$((issues + 1))
     fi
     
     # Check 2: Python environment
+    show_substep "Checking Python environment..."
     if [ -d "$ASTRO_ENV" ] && [ -f "$ASTRO_ENV/bin/activate" ]; then
-        success "Python environment exists"
+        complete_substep "Python environment exists"
         
         # Check core packages
+        show_substep "Checking core packages..."
+        # shellcheck source=/dev/null
         source "$ASTRO_ENV/bin/activate"
         if python -c "import numpy, matplotlib, astropy" 2>/dev/null; then
-            success "Core packages (numpy, matplotlib, astropy) OK"
+            complete_substep "Core packages (numpy, matplotlib, astropy) OK"
         else
-            error "Core packages missing or broken"
+            fail_substep "Core packages missing or broken"
             issues=$((issues + 1))
         fi
         deactivate
     else
-        error "Python environment missing or corrupted"
+        fail_substep "Python environment missing or corrupted"
         issues=$((issues + 1))
     fi
     
     # Check 3: TOPCAT
+    show_substep "Checking TOPCAT..."
     if [ -f "$ASTRO_CACHE/topcat-full.jar" ]; then
-        success "TOPCAT JAR file present"
+        complete_substep "TOPCAT JAR file present"
     else
-        warning "TOPCAT not downloaded"
+        warn_substep "TOPCAT not downloaded"
         warnings=$((warnings + 1))
     fi
     
     # Check 4: Java (for TOPCAT)
+    show_substep "Checking Java..."
     if command -v java >/dev/null 2>&1; then
-        local java_version=$(java -version 2>&1 | head -1)
-        success "Java installed: $java_version"
+        local java_version
+        java_version=$(java -version 2>&1 | head -1)
+        complete_substep "Java installed: $java_version"
     else
-        warning "Java not installed (required for TOPCAT)"
+        warn_substep "Java not installed (required for TOPCAT)"
         warnings=$((warnings + 1))
     fi
     
     # Check 5: Shell configuration
-    detect_system
+    show_substep "Checking shell configuration..."
+    # Re-detect system to get SHELL_CONFIG
+    local user_shell
+    user_shell=$(basename "${SHELL:-/bin/bash}")
+    case "$user_shell" in
+        zsh) SHELL_CONFIG="$HOME/.zshrc" ;;
+        bash) SHELL_CONFIG="$HOME/.bashrc" ;;
+        *) SHELL_CONFIG="$HOME/.profile" ;;
+    esac
+    
     if grep -q "ASTRO_HOME" "$SHELL_CONFIG" 2>/dev/null; then
-        success "Shell configuration present in $SHELL_CONFIG"
+        complete_substep "Shell configuration present in $SHELL_CONFIG"
     else
-        warning "Shell configuration missing"
+        warn_substep "Shell configuration missing from $SHELL_CONFIG"
         warnings=$((warnings + 1))
     fi
     
     # Check 6: Display system
-    if [ "$DISPLAY_SYSTEM" == "wayland" ]; then
-        info "Display: Wayland detected"
+    show_substep "Checking display system..."
+    if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        info "   Display: Wayland detected"
         if command -v Xwayland >/dev/null 2>&1 || dpkg -l xwayland >/dev/null 2>&1; then
-            success "XWayland available for GUI compatibility"
+            complete_substep "XWayland available for GUI compatibility"
         else
-            warning "XWayland not installed (GUI tools may not work)"
+            warn_substep "XWayland not installed (GUI tools may not work)"
             warnings=$((warnings + 1))
         fi
-    elif [ "$DISPLAY_SYSTEM" == "x11" ]; then
-        success "Display: X11 (native support)"
+    elif [ -n "${DISPLAY:-}" ]; then
+        complete_substep "Display: X11 (native support)"
     else
-        warning "Display system not detected"
+        warn_substep "Display system not detected (headless/SSH?)"
         warnings=$((warnings + 1))
     fi
     
@@ -849,18 +1274,36 @@ cmd_repair() {
     echo -e "${BOLD}Attempting to repair environment...${NC}"
     echo ""
     
-    detect_system
+    # Initialize logging
+    init_log
+    
+    # Re-detect system
+    local user_shell
+    user_shell=$(basename "${SHELL:-/bin/bash}")
+    case "$user_shell" in
+        zsh) SHELL_CONFIG="$HOME/.zshrc"; SHELL_TYPE="zsh" ;;
+        bash) SHELL_CONFIG="$HOME/.bashrc"; SHELL_TYPE="bash" ;;
+        *) SHELL_CONFIG="$HOME/.profile"; SHELL_TYPE="sh" ;;
+    esac
+    
+    if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        DISPLAY_SYSTEM="wayland"
+    elif [ -n "${DISPLAY:-}" ]; then
+        DISPLAY_SYSTEM="x11"
+    else
+        DISPLAY_SYSTEM="unknown"
+    fi
     
     # Repair base structure
     if [ ! -d "$ASTRO_HOME" ]; then
-        log "Recreating directory structure..."
+        show_substep "Recreating directory structure..."
         mark_uninstalled "base_structure"
         install_base_structure
     fi
     
     # Repair Python environment
     if [ ! -f "$ASTRO_ENV/bin/activate" ]; then
-        log "Recreating Python environment..."
+        show_substep "Recreating Python environment..."
         rm -rf "$ASTRO_ENV" 2>/dev/null || true
         mark_uninstalled "python_env"
         install_python_environment
@@ -868,21 +1311,21 @@ cmd_repair() {
     
     # Repair TOPCAT
     if [ ! -f "$ASTRO_CACHE/topcat-full.jar" ]; then
-        log "Re-downloading TOPCAT..."
+        show_substep "Re-downloading TOPCAT..."
         mark_uninstalled "topcat"
         install_topcat
     fi
     
     # Repair shell configuration
     if ! grep -q "ASTRO_HOME" "$SHELL_CONFIG" 2>/dev/null; then
-        log "Restoring shell configuration..."
+        show_substep "Restoring shell configuration..."
         mark_uninstalled "shell_config"
         setup_shell_integration
     fi
     
     # Repair wrapper scripts
     if [ ! -f "$ASTRO_BIN/astro-jupyter" ]; then
-        log "Recreating wrapper scripts..."
+        show_substep "Recreating wrapper scripts..."
         mark_uninstalled "wrappers"
         create_wrapper_scripts
     fi
@@ -905,6 +1348,7 @@ cmd_jupyter() {
     echo "   Notebooks: $ASTRO_NOTEBOOKS"
     echo ""
     
+    # shellcheck source=/dev/null
     source "$ASTRO_ENV/bin/activate"
     cd "$ASTRO_NOTEBOOKS"
     exec jupyter lab
@@ -939,6 +1383,7 @@ cmd_python() {
         exit 1
     fi
     
+    # shellcheck source=/dev/null
     source "$ASTRO_ENV/bin/activate"
     exec python "$@"
 }
@@ -951,32 +1396,68 @@ cmd_update() {
     
     print_header "ASTRONOMY STARTER KIT - Update"
     
-    log "Updating Python packages..."
+    init_log
     
+    echo -e "${BOLD}Updating Python packages...${NC}"
+    echo ""
+    
+    # shellcheck source=/dev/null
     source "$ASTRO_ENV/bin/activate"
     
-    pip install --upgrade pip setuptools wheel
-    pip install --upgrade numpy scipy matplotlib pandas
-    pip install --upgrade astropy
-    pip install --upgrade jupyter jupyterlab
-    pip install --upgrade plotly seaborn bokeh
+    show_substep "Upgrading pip, setuptools, wheel..."
+    if pip install --upgrade pip setuptools wheel >> "$INSTALL_LOG" 2>&1; then
+        complete_substep "pip, setuptools, wheel upgraded"
+    else
+        warn_substep "Failed to upgrade pip"
+    fi
+    
+    show_substep "Upgrading numpy, scipy, matplotlib, pandas..."
+    if pip install --upgrade numpy scipy matplotlib pandas >> "$INSTALL_LOG" 2>&1; then
+        complete_substep "Core libraries upgraded"
+    else
+        warn_substep "Some core libraries failed to upgrade"
+    fi
+    
+    show_substep "Upgrading astropy..."
+    if pip install --upgrade astropy >> "$INSTALL_LOG" 2>&1; then
+        complete_substep "Astropy upgraded"
+    else
+        warn_substep "Astropy upgrade failed"
+    fi
+    
+    show_substep "Upgrading Jupyter..."
+    if pip install --upgrade jupyter jupyterlab >> "$INSTALL_LOG" 2>&1; then
+        complete_substep "Jupyter upgraded"
+    else
+        warn_substep "Jupyter upgrade failed"
+    fi
+    
+    show_substep "Upgrading visualization tools..."
+    if pip install --upgrade plotly seaborn bokeh >> "$INSTALL_LOG" 2>&1; then
+        complete_substep "Visualization tools upgraded"
+    else
+        warn_substep "Some visualization tools failed"
+    fi
     
     deactivate
     
     # Update TOPCAT
     if [ -f "$ASTRO_CACHE/topcat-full.jar" ]; then
-        log "Checking for TOPCAT updates..."
+        show_substep "Checking for TOPCAT updates..."
         local temp_file="/tmp/topcat-check.jar"
         if wget -q "$TOPCAT_URL" -O "$temp_file" 2>/dev/null; then
-            local old_size=$(stat -c%s "$ASTRO_CACHE/topcat-full.jar" 2>/dev/null || echo "0")
-            local new_size=$(stat -c%s "$temp_file" 2>/dev/null || echo "0")
+            local old_size new_size
+            old_size=$(stat -c%s "$ASTRO_CACHE/topcat-full.jar" 2>/dev/null || echo "0")
+            new_size=$(stat -c%s "$temp_file" 2>/dev/null || echo "0")
             if [ "$new_size" != "$old_size" ]; then
                 mv "$temp_file" "$ASTRO_CACHE/topcat-full.jar"
-                success "TOPCAT updated"
+                complete_substep "TOPCAT updated"
             else
                 rm -f "$temp_file"
-                info "TOPCAT is already up to date"
+                complete_substep "TOPCAT is already up to date"
             fi
+        else
+            warn_substep "Could not check TOPCAT updates"
         fi
     fi
     
@@ -1012,21 +1493,31 @@ cmd_uninstall() {
     log "Starting uninstall..."
     
     # Remove Jupyter kernel
+    show_substep "Removing Jupyter kernel..."
     if command -v jupyter >/dev/null 2>&1; then
-        log "Removing Jupyter kernel..."
         jupyter kernelspec uninstall astro -y 2>/dev/null || true
     fi
+    complete_substep "Jupyter kernel removed"
     
     # Remove shell configuration
-    detect_system
+    show_substep "Removing shell configuration..."
+    local user_shell
+    user_shell=$(basename "${SHELL:-/bin/bash}")
+    case "$user_shell" in
+        zsh) SHELL_CONFIG="$HOME/.zshrc" ;;
+        bash) SHELL_CONFIG="$HOME/.bashrc" ;;
+        *) SHELL_CONFIG="$HOME/.profile" ;;
+    esac
+    
     if [ -f "$SHELL_CONFIG" ]; then
-        log "Removing shell configuration..."
         sed -i '/# ==== ASTRO ENVIRONMENT ====/,/# ==== END ASTRO ====/d' "$SHELL_CONFIG" 2>/dev/null || true
     fi
+    complete_substep "Shell configuration removed"
     
     # Remove the main directory
-    log "Removing $ASTRO_HOME..."
+    show_substep "Removing $ASTRO_HOME..."
     rm -rf "$ASTRO_HOME"
+    complete_substep "Directory removed"
     
     echo ""
     success "Astronomy Starter Kit has been uninstalled"
@@ -1072,6 +1563,11 @@ cmd_help() {
     echo "    astro jupyter              # Start Jupyter Lab"
     echo "    astro topcat catalog.fits  # Open catalog in TOPCAT"
     echo "    astro python script.py     # Run script with astronomy Python"
+    echo ""
+    echo -e "${BOLD}Troubleshooting:${NC}"
+    echo "    astro doctor               # Run diagnostics"
+    echo "    astro repair               # Fix common issues"
+    echo "    cat ~/.astro/.install.log  # View installation log"
     echo ""
     echo -e "${BOLD}Documentation:${NC}"
     echo "    https://github.com/RedChaosWolf92/astronomy-starter-kit"

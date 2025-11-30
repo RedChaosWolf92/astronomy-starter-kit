@@ -23,7 +23,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Configuration
-LAUNCHER_URL="https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/main/astro"
+LAUNCHER_URL="https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/Test_fixes/astro"
 INSTALL_DIR="$HOME/.local/bin"
 
 # Print header
