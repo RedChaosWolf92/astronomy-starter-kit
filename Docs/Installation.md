@@ -27,7 +27,7 @@ The toolkit also works on Debian-based distributions (Linux Mint, Pop!_OS, etc.)
 Open a terminal and run:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/main/astronomyinstaller.sh | bash
+    curl -sSL https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/main/astronomyinstaller.sh | bash
 ```
 
 This single command downloads and runs the bootstrap installer, which sets up everything automatically.
