@@ -20,7 +20,7 @@
 
 ### Installation (30 seconds)
 ```bash
-curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/astronomy-starter-kit/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/RedChaosWolf92/astronomy-starter-kit/Main/astronomyinstaller.sh | bash
 ```
 
 That's it! The installer will:
