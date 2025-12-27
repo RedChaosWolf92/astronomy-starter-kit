@@ -30,7 +30,7 @@ INSTALL_DIR="$HOME/.local/bin"
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║${NC}          ${BLUE}ASTRONOMY STARTER KIT${NC} - Bootstrap               ${CYAN}║${NC}"
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
-echo ""
+echo -e ""
 
 # Check system
 if [ ! -f /etc/os-release ]; then
@@ -43,7 +43,7 @@ fi
 if [[ "$ID" != "ubuntu" && "$ID_LIKE" != *"ubuntu"* && "$ID" != "debian" ]]; then
     echo -e "${YELLOW}⚠ Warning: This installer is optimized for Ubuntu/Debian${NC}"
     echo -e "${YELLOW}  Detected: $PRETTY_NAME${NC}"
-    echo ""
+    echo -e ""
 fi
 
 echo -e "${GREEN}✓${NC} System: $PRETTY_NAME"
@@ -75,11 +75,11 @@ fi
 mkdir -p "$INSTALL_DIR"
 
 # Download launcher
-echo ""
+echo -e ""
 echo -e "${BLUE}Downloading astro launcher...${NC}"
 if ! curl -sSL "$LAUNCHER_URL" -o "$INSTALL_DIR/astro"; then
     echo -e "${RED}✗ Failed to download launcher${NC}"
-    echo "  URL: $LAUNCHER_URL"
+    echo -e "  URL: $LAUNCHER_URL"
     exit 1
 fi
 
@@ -88,7 +88,7 @@ echo -e "${GREEN}✓${NC} Launcher downloaded to $INSTALL_DIR/astro"
 
 # Add to PATH if needed
 if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
-    echo ""
+    echo -e ""
     echo -e "${BLUE}Adding $INSTALL_DIR to PATH...${NC}"
     
     # Add PATH configuration to shell config
@@ -107,29 +107,29 @@ else
 fi
 
 # Success message
-echo ""
+echo -e ""
 echo -e "${CYAN}════════════════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}${BOLD}Bootstrap complete!${NC}"
 echo -e "${CYAN}════════════════════════════════════════════════════════════════${NC}"
-echo ""
+echo -e ""
 echo -e "${BOLD}Next steps:${NC}"
-echo ""
-echo "1. ${YELLOW}Reload your shell:${NC}"
-echo "   source $SHELL_CONFIG"
-echo "   # Or close and reopen your terminal"
-echo ""
-echo "2. ${YELLOW}Run full installation (installs Python, TOPCAT, etc.):${NC}"
-echo "   astro"
-echo ""
-echo "3. ${YELLOW}After installation, use these commands:${NC}"
-echo "   astro jupyter      # Launch Jupyter Lab"
-echo "   astro topcat       # Launch TOPCAT catalog tool"
-echo "   astro ds9          # Launch DS9 FITS viewer"
-echo "   astro python       # Python with astronomy libraries"
-echo "   astro status       # Check installation status"
-echo "   astro help         # Show all commands"
-echo ""
+echo -e ""
+echo -e "1. ${YELLOW}Reload your shell:${NC}"
+echo -e "   source $SHELL_CONFIG"
+echo -e "   # Or close and reopen your terminal"
+echo -e ""
+echo -e "2. ${YELLOW}Run full installation (installs Python, TOPCAT, etc.):${NC}"
+echo -e "   astro"
+echo -e ""
+echo -e "3. ${YELLOW}After installation, use these commands:${NC}"
+echo -e "   astro jupyter      # Launch Jupyter Lab"
+echo -e "   astro topcat       # Launch TOPCAT catalog tool"
+echo -e "   astro ds9          # Launch DS9 FITS viewer"
+echo -e "   astro python       # Python with astronomy libraries"
+echo -e "   astro status       # Check installation status"
+echo -e "   astro help         # Show all commands"
+echo -e ""
 echo -e "${CYAN}────────────────────────────────────────────────────────────────${NC}"
-echo "Documentation: https://github.com/RedChaosWolf92/astronomy-starter-kit"
+echo -e "Documentation: https://github.com/RedChaosWolf92/astronomy-starter-kit"
 echo -e "${CYAN}────────────────────────────────────────────────────────────────${NC}"
-echo ""
+echo -e ""
