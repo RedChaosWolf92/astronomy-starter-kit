@@ -102,7 +102,7 @@ print_header() {
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
     printf "${CYAN}║${NC}  %-62s ${CYAN}║${NC}\n" "$title"
     echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
+    echo -e ""
 }
 
 # Print a section divider
@@ -119,7 +119,7 @@ get_state() {
     if [ -f "$STATE_FILE" ]; then
         grep "^${key}=" "$STATE_FILE" 2>/dev/null | cut -d'=' -f2 || echo ""
     else
-        echo ""
+        echo -e ""
     fi
 }
 
@@ -132,7 +132,7 @@ set_state() {
         # Remove existing key if present
         sed -i "/^${key}=/d" "$STATE_FILE" 2>/dev/null || true
     fi
-    echo "${key}=${value}" >> "$STATE_FILE"
+    echo -e "${key}=${value}" >> "$STATE_FILE"
 }
 
 is_installed() {
@@ -171,10 +171,10 @@ detect_system() {
     if [[ "$OS_ID" != "ubuntu" && "$ID_LIKE" != *"ubuntu"* && "$OS_ID" != "debian" && "$ID_LIKE" != *"debian"* ]]; then
         warning "This installer is optimized for Ubuntu/Debian"
         warning "Detected: $OS_NAME"
-        echo ""
+        echo -e ""
         read -p "Continue anyway? (y/N): " -r
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "Installation cancelled"
+            echo -e "Installation cancelled"
             exit 1
         fi
     fi
@@ -273,10 +273,10 @@ install_base_structure() {
     
     # Initialize log file
     touch "$INSTALL_LOG"
-    echo "=== Astronomy Starter Kit Installation Log ===" >> "$INSTALL_LOG"
-    echo "Started: $(date)" >> "$INSTALL_LOG"
-    echo "System: $OS_NAME" >> "$INSTALL_LOG"
-    echo "" >> "$INSTALL_LOG"
+    echo -e "=== Astronomy Starter Kit Installation Log ===" >> "$INSTALL_LOG"
+    echo -e "Started: $(date)" >> "$INSTALL_LOG"
+    echo -e "System: $OS_NAME" >> "$INSTALL_LOG"
+    echo -e "" >> "$INSTALL_LOG"
     
     mark_installed "base_structure"
     success "Directory structure created"
@@ -289,7 +289,7 @@ install_python_environment() {
     
     log "Setting up Python environment..."
     log "This may take 5-10 minutes depending on your internet connection"
-    echo ""
+    echo -e ""
     
     # Ensure python3-venv is installed (required on Ubuntu)
     if ! dpkg -l python3-venv >/dev/null 2>&1; then
@@ -443,8 +443,8 @@ fi
 TOPCAT_JAR="$HOME/.astro/cache/topcat-full.jar"
 
 if [ ! -f "$TOPCAT_JAR" ]; then
-    echo "Error: TOPCAT not found at $TOPCAT_JAR"
-    echo "Run 'astro repair' to fix this"
+    echo -e "Error: TOPCAT not found at $TOPCAT_JAR"
+    echo -e "Run 'astro repair' to fix this"
     exit 1
 fi
 
@@ -518,8 +518,8 @@ create_wrapper_scripts() {
 # Jupyter Lab Launcher - Astronomy Starter Kit
 source "$HOME/.astro/env/bin/activate"
 cd "$HOME/.astro/notebooks"
-echo "🔭 Launching Jupyter Lab..."
-echo "   Notebooks directory: $HOME/.astro/notebooks"
+echo -e "🔭 Launching Jupyter Lab..."
+echo -e "   Notebooks directory: $HOME/.astro/notebooks"
 exec jupyter lab
 EOFJUPYTER
     
@@ -632,30 +632,30 @@ run_full_install() {
     print_header "ASTRONOMY STARTER KIT - First Time Setup"
     
     echo -e "${BOLD}This will install:${NC}"
-    echo "  • Python scientific environment (numpy, scipy, matplotlib, pandas)"
-    echo "  • Astronomy libraries (astropy)"
-    echo "  • Jupyter Lab for interactive development"
-    echo "  • TOPCAT for catalog analysis"
-    echo "  • DS9 for FITS image viewing"
-    echo "  • Convenience launcher scripts"
-    echo ""
+    echo -e "  • Python scientific environment (numpy, scipy, matplotlib, pandas)"
+    echo -e "  • Astronomy libraries (astropy)"
+    echo -e "  • Jupyter Lab for interactive development"
+    echo -e "  • TOPCAT for catalog analysis"
+    echo -e "  • DS9 for FITS image viewing"
+    echo -e "  • Convenience launcher scripts"
+    echo -e ""
     echo -e "${YELLOW}Installation location:${NC} $ASTRO_HOME"
     echo -e "${YELLOW}Estimated time:${NC} 10-15 minutes"
     echo -e "${YELLOW}Required disk space:${NC} ~2 GB"
-    echo ""
+    echo -e ""
     
     read -p "Continue with installation? (Y/n): " -r
     echo
     if [[ $REPLY =~ ^[Nn]$ ]]; then
-        echo "Installation cancelled"
+        echo -e "Installation cancelled"
         exit 0
     fi
     
-    echo ""
+    echo -e ""
     print_divider
     log "Starting installation..."
     print_divider
-    echo ""
+    echo -e ""
     
     # Run all installation steps
     detect_system
@@ -677,30 +677,30 @@ run_full_install() {
     local end_time=$(date +%s)
     local duration=$((end_time - start_time))
     
-    echo ""
+    echo -e ""
     print_divider
-    echo ""
+    echo -e ""
     print_header "INSTALLATION COMPLETE!"
     
     echo -e "${GREEN}✓ Installation completed in ${duration} seconds${NC}"
-    echo ""
+    echo -e ""
     echo -e "${BOLD}Next steps:${NC}"
-    echo ""
-    echo "1. ${YELLOW}Reload your shell:${NC}"
-    echo "   source $SHELL_CONFIG"
-    echo "   # Or close and reopen your terminal"
-    echo ""
-    echo "2. ${YELLOW}Start using the tools:${NC}"
-    echo "   astro                # Show command menu"
-    echo "   astro jupyter        # Launch Jupyter Lab"
-    echo "   astro topcat         # Launch TOPCAT"
-    echo "   astro-activate       # Activate Python environment"
-    echo ""
-    echo "3. ${YELLOW}Read the documentation:${NC}"
-    echo "   $ASTRO_HOME/README.md"
-    echo ""
+    echo -e ""
+    echo -e "1. ${YELLOW}Reload your shell:${NC}"
+    echo -e "   source $SHELL_CONFIG"
+    echo -e "   # Or close and reopen your terminal"
+    echo -e ""
+    echo -e "2. ${YELLOW}Start using the tools:${NC}"
+    echo -e "   astro                # Show command menu"
+    echo -e "   astro jupyter        # Launch Jupyter Lab"
+    echo -e "   astro topcat         # Launch TOPCAT"
+    echo -e "   astro-activate       # Activate Python environment"
+    echo -e ""
+    echo -e "3. ${YELLOW}Read the documentation:${NC}"
+    echo -e "   $ASTRO_HOME/README.md"
+    echo -e ""
     echo -e "${CYAN}Happy exploring! 🔭✨${NC}"
-    echo ""
+    echo -e ""
 }
 
 #==============================================================================
@@ -712,16 +712,16 @@ cmd_status() {
     
     if [ "$(get_state fully_installed)" == "true" ]; then
         echo -e "${GREEN}✓ Environment installed${NC}"
-        echo ""
-        echo "  Version:      $(get_state install_version)"
-        echo "  Install date: $(get_state install_date)"
-        echo "  Location:     $ASTRO_HOME"
-        echo "  Shell:        $(get_state shell_type)"
-        echo "  Display:      $(get_state display_system)"
-        echo ""
+        echo -e ""
+        echo -e "  Version:      $(get_state install_version)"
+        echo -e "  Install date: $(get_state install_date)"
+        echo -e "  Location:     $ASTRO_HOME"
+        echo -e "  Shell:        $(get_state shell_type)"
+        echo -e "  Display:      $(get_state display_system)"
+        echo -e ""
         
         print_divider
-        echo ""
+        echo -e ""
         echo -e "${BOLD}Components:${NC}"
         is_installed "base_structure" && echo -e "  ${GREEN}✓${NC} Directory structure" || echo -e "  ${RED}✗${NC} Directory structure"
         is_installed "python_env" && echo -e "  ${GREEN}✓${NC} Python environment" || echo -e "  ${RED}✗${NC} Python environment"
@@ -729,21 +729,21 @@ cmd_status() {
         is_installed "topcat" && echo -e "  ${GREEN}✓${NC} TOPCAT" || echo -e "  ${RED}✗${NC} TOPCAT"
         is_installed "shell_config" && echo -e "  ${GREEN}✓${NC} Shell configuration" || echo -e "  ${RED}✗${NC} Shell configuration"
         is_installed "wrappers" && echo -e "  ${GREEN}✓${NC} Wrapper scripts" || echo -e "  ${RED}✗${NC} Wrapper scripts"
-        echo ""
+        echo -e ""
         
         print_divider
-        echo ""
+        echo -e ""
         echo -e "${BOLD}Quick commands:${NC}"
-        echo "  astro jupyter      Launch Jupyter Lab"
-        echo "  astro topcat       Launch TOPCAT"
-        echo "  astro python       Launch Python"
-        echo "  astro-activate     Activate environment"
-        echo ""
+        echo -e "  astro jupyter      Launch Jupyter Lab"
+        echo -e "  astro topcat       Launch TOPCAT"
+        echo -e "  astro python       Launch Python"
+        echo -e "  astro-activate     Activate environment"
+        echo -e ""
     else
         echo -e "${YELLOW}⚠ Environment not fully installed${NC}"
-        echo ""
-        echo "Run 'astro' to complete installation"
-        echo ""
+        echo -e ""
+        echo -e "Run 'astro' to complete installation"
+        echo -e ""
     fi
 }
 
@@ -754,7 +754,7 @@ cmd_doctor() {
     local warnings=0
     
     echo -e "${BOLD}Running health checks...${NC}"
-    echo ""
+    echo -e ""
     
     # Check 1: Directory structure
     if [ -d "$ASTRO_HOME" ]; then
@@ -825,29 +825,29 @@ cmd_doctor() {
     fi
     
     # Summary
-    echo ""
+    echo -e ""
     print_divider
-    echo ""
+    echo -e ""
     
     if [ $issues -eq 0 ] && [ $warnings -eq 0 ]; then
         echo -e "${GREEN}${BOLD}✓ All checks passed!${NC}"
-        echo "  Your astronomy environment is healthy."
+        echo -e "  Your astronomy environment is healthy."
     elif [ $issues -eq 0 ]; then
         echo -e "${YELLOW}${BOLD}⚠ $warnings warning(s) found${NC}"
-        echo "  Environment is functional but some features may be limited."
-        echo "  Run 'astro repair' to fix optional components."
+        echo -e "  Environment is functional but some features may be limited."
+        echo -e "  Run 'astro repair' to fix optional components."
     else
         echo -e "${RED}${BOLD}✗ $issues issue(s) found${NC}"
-        echo "  Run 'astro repair' to attempt automatic fixes."
+        echo -e "  Run 'astro repair' to attempt automatic fixes."
     fi
-    echo ""
+    echo -e ""
 }
 
 cmd_repair() {
     print_header "ASTRONOMY STARTER KIT - Repair"
     
     echo -e "${BOLD}Attempting to repair environment...${NC}"
-    echo ""
+    echo -e ""
     
     detect_system
     
@@ -887,23 +887,23 @@ cmd_repair() {
         create_wrapper_scripts
     fi
     
-    echo ""
+    echo -e ""
     success "Repair complete!"
-    echo ""
-    echo "Run 'astro doctor' to verify the repairs"
-    echo ""
+    echo -e ""
+    echo -e "Run 'astro doctor' to verify the repairs"
+    echo -e ""
 }
 
 cmd_jupyter() {
     if ! is_installed "python_env"; then
         error "Python environment not installed"
-        echo "Run 'astro' to complete installation first"
+        echo -e "Run 'astro' to complete installation first"
         exit 1
     fi
     
     echo -e "${CYAN}🔭 Launching Jupyter Lab...${NC}"
-    echo "   Notebooks: $ASTRO_NOTEBOOKS"
-    echo ""
+    echo -e "   Notebooks: $ASTRO_NOTEBOOKS"
+    echo -e ""
     
     source "$ASTRO_ENV/bin/activate"
     cd "$ASTRO_NOTEBOOKS"
@@ -913,7 +913,7 @@ cmd_jupyter() {
 cmd_topcat() {
     if [ ! -f "$ASTRO_CACHE/topcat-full.jar" ]; then
         error "TOPCAT not installed"
-        echo "Run 'astro repair' to install TOPCAT"
+        echo -e "Run 'astro repair' to install TOPCAT"
         exit 1
     fi
     
@@ -924,7 +924,7 @@ cmd_topcat() {
 cmd_ds9() {
     if ! command -v ds9 >/dev/null 2>&1; then
         error "DS9 not installed"
-        echo "Install with: sudo apt install saods9"
+        echo -e "Install with: sudo apt install saods9"
         exit 1
     fi
     
@@ -935,7 +935,7 @@ cmd_ds9() {
 cmd_python() {
     if ! is_installed "python_env"; then
         error "Python environment not installed"
-        echo "Run 'astro' to complete installation first"
+        echo -e "Run 'astro' to complete installation first"
         exit 1
     fi
     
@@ -982,33 +982,33 @@ cmd_update() {
     
     set_state "last_update" "$(date +%Y-%m-%d)"
     
-    echo ""
+    echo -e ""
     success "Update complete!"
-    echo ""
+    echo -e ""
 }
 
 cmd_uninstall() {
     print_header "ASTRONOMY STARTER KIT - Uninstall"
     
     echo -e "${RED}${BOLD}WARNING: This will completely remove the astronomy environment${NC}"
-    echo ""
-    echo "The following will be deleted:"
-    echo "  • $ASTRO_HOME (all files and data)"
-    echo "  • Shell configuration entries"
-    echo "  • Jupyter kernel registration"
-    echo ""
+    echo -e ""
+    echo -e "The following will be deleted:"
+    echo -e "  • $ASTRO_HOME (all files and data)"
+    echo -e "  • Shell configuration entries"
+    echo -e "  • Jupyter kernel registration"
+    echo -e ""
     echo -e "${YELLOW}Note: System packages (Java, DS9) will NOT be removed${NC}"
-    echo ""
+    echo -e ""
     
     read -p "Type 'uninstall' to confirm: " -r
     echo
     
     if [ "$REPLY" != "uninstall" ]; then
-        echo "Uninstall cancelled"
+        echo -e "Uninstall cancelled"
         exit 0
     fi
     
-    echo ""
+    echo -e ""
     log "Starting uninstall..."
     
     # Remove Jupyter kernel
@@ -1028,61 +1028,61 @@ cmd_uninstall() {
     log "Removing $ASTRO_HOME..."
     rm -rf "$ASTRO_HOME"
     
-    echo ""
+    echo -e ""
     success "Astronomy Starter Kit has been uninstalled"
-    echo ""
-    echo "To complete removal, reload your shell:"
+    echo -e ""
+    echo -e "To complete removal, reload your shell:"
     echo -e "  ${YELLOW}source $SHELL_CONFIG${NC}"
-    echo "  # Or close and reopen your terminal"
-    echo ""
-    echo "Thank you for using Astronomy Starter Kit! 🔭"
-    echo ""
+    echo -e "  # Or close and reopen your terminal"
+    echo -e ""
+    echo -e "Thank you for using Astronomy Starter Kit! 🔭"
+    echo -e ""
 }
 
 cmd_help() {
     print_header "ASTRONOMY STARTER KIT - Help"
     
     echo -e "${BOLD}Version:${NC} $VERSION"
-    echo ""
+    echo -e ""
     echo -e "${BOLD}Usage:${NC} astro [command] [options]"
-    echo ""
+    echo -e ""
     echo -e "${BOLD}Commands:${NC}"
-    echo ""
-    echo "  ${CYAN}Launch Tools:${NC}"
-    echo "    jupyter         Launch Jupyter Lab"
-    echo "    topcat          Launch TOPCAT catalog analyzer"
-    echo "    ds9             Launch DS9 FITS viewer"
-    echo "    python          Launch Python with astronomy environment"
-    echo ""
-    echo "  ${CYAN}Environment Management:${NC}"
-    echo "    status          Show installation status"
-    echo "    doctor          Check environment health"
-    echo "    repair          Fix broken components"
-    echo "    update          Update packages to latest versions"
-    echo "    uninstall       Remove the entire environment"
-    echo ""
-    echo "  ${CYAN}Help:${NC}"
-    echo "    help            Show this help message"
-    echo "    version         Show version information"
-    echo ""
+    echo -e ""
+    echo -e "  ${CYAN}Launch Tools:${NC}"
+    echo -e "    jupyter         Launch Jupyter Lab"
+    echo -e "    topcat          Launch TOPCAT catalog analyzer"
+    echo -e "    ds9             Launch DS9 FITS viewer"
+    echo -e "    python          Launch Python with astronomy environment"
+    echo -e ""
+    echo -e "  ${CYAN}Environment Management:${NC}"
+    echo -e "    status          Show installation status"
+    echo -e "    doctor          Check environment health"
+    echo -e "    repair          Fix broken components"
+    echo -e "    update          Update packages to latest versions"
+    echo -e "    uninstall       Remove the entire environment"
+    echo -e ""
+    echo -e "  ${CYAN}Help:${NC}"
+    echo -e "    help            Show this help message"
+    echo -e "    version         Show version information"
+    echo -e ""
     echo -e "${BOLD}Aliases:${NC}"
-    echo "    astro-activate  Activate Python environment directly"
-    echo ""
+    echo -e "    astro-activate  Activate Python environment directly"
+    echo -e ""
     echo -e "${BOLD}Examples:${NC}"
-    echo "    astro jupyter              # Start Jupyter Lab"
-    echo "    astro topcat catalog.fits  # Open catalog in TOPCAT"
-    echo "    astro python script.py     # Run script with astronomy Python"
-    echo ""
+    echo -e "    astro jupyter              # Start Jupyter Lab"
+    echo -e "    astro topcat catalog.fits  # Open catalog in TOPCAT"
+    echo -e "    astro python script.py     # Run script with astronomy Python"
+    echo -e ""
     echo -e "${BOLD}Documentation:${NC}"
-    echo "    https://github.com/RedChaosWolf92/astronomy-starter-kit"
-    echo ""
+    echo -e "    https://github.com/RedChaosWolf92/astronomy-starter-kit"
+    echo -e ""
 }
 
 cmd_version() {
-    echo "Astronomy Starter Kit v$VERSION"
+    echo -e "Astronomy Starter Kit v$VERSION"
     if [ "$(get_state fully_installed)" == "true" ]; then
-        echo "Installed: $(get_state install_date)"
-        echo "Location: $ASTRO_HOME"
+        echo -e "Installed: $(get_state install_date)"
+        echo -e "Location: $ASTRO_HOME"
     fi
 }
 
@@ -1090,29 +1090,29 @@ show_menu() {
     print_header "ASTRONOMY STARTER KIT"
     
     echo -e "${BOLD}Quick Commands:${NC}"
-    echo ""
-    echo "  ${YELLOW}astro jupyter${NC}      Launch Jupyter Lab"
-    echo "  ${YELLOW}astro topcat${NC}       Launch TOPCAT catalog tool"
-    echo "  ${YELLOW}astro ds9${NC}          Launch DS9 FITS viewer"
-    echo "  ${YELLOW}astro python${NC}       Launch Python environment"
-    echo ""
+    echo -e ""
+    echo -e "  ${YELLOW}astro jupyter${NC}      Launch Jupyter Lab"
+    echo -e "  ${YELLOW}astro topcat${NC}       Launch TOPCAT catalog tool"
+    echo -e "  ${YELLOW}astro ds9${NC}          Launch DS9 FITS viewer"
+    echo -e "  ${YELLOW}astro python${NC}       Launch Python environment"
+    echo -e ""
     print_divider
-    echo ""
+    echo -e ""
     echo -e "${BOLD}Management:${NC}"
-    echo ""
-    echo "  ${YELLOW}astro status${NC}       Show installation status"
-    echo "  ${YELLOW}astro doctor${NC}       Check environment health"
-    echo "  ${YELLOW}astro repair${NC}       Fix broken components"
-    echo "  ${YELLOW}astro update${NC}       Update packages"
-    echo "  ${YELLOW}astro uninstall${NC}    Remove environment"
-    echo "  ${YELLOW}astro help${NC}         Show detailed help"
-    echo ""
+    echo -e ""
+    echo -e "  ${YELLOW}astro status${NC}       Show installation status"
+    echo -e "  ${YELLOW}astro doctor${NC}       Check environment health"
+    echo -e "  ${YELLOW}astro repair${NC}       Fix broken components"
+    echo -e "  ${YELLOW}astro update${NC}       Update packages"
+    echo -e "  ${YELLOW}astro uninstall${NC}    Remove environment"
+    echo -e "  ${YELLOW}astro help${NC}         Show detailed help"
+    echo -e ""
     print_divider
-    echo ""
+    echo -e ""
     echo -e "${BOLD}Direct Activation:${NC}"
-    echo ""
-    echo "  ${YELLOW}astro-activate${NC}     Activate Python environment in current shell"
-    echo ""
+    echo -e ""
+    echo -e "  ${YELLOW}astro-activate${NC}     Activate Python environment in current shell"
+    echo -e ""
 }
 
 #==============================================================================
@@ -1173,8 +1173,8 @@ main() {
             ;;
         *)
             error "Unknown command: $1"
-            echo ""
-            echo "Run 'astro help' for available commands"
+            echo -e ""
+            echo -e "Run 'astro help' for available commands"
             exit 1
             ;;
     esac
