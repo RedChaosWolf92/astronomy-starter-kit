@@ -221,10 +221,10 @@ check_dependencies() {
     local missing=()
     
     # Check essential commands
-    command -v curl >/dev/null 2>&1 || missing+=("curl")
-    command -v wget >/dev/null 2>&1 || missing+=("wget")
-    command -v git >/dev/null 2>&1 || missing+=("git")
-    command -v python3 >/dev/null 2>&1 || missing+=("python3")
+    command -v curl || missing+=("curl")
+    command -v wget || missing+=("wget")
+    command -v git || missing+=("git")
+    command -v python3 || missing+=("python3")
     
     if [ ${#missing[@]} -gt 0 ]; then
         log "Installing missing system dependencies: ${missing[*]}"
@@ -292,7 +292,7 @@ install_python_environment() {
     echo -e ""
     
     # Ensure python3-venv is installed (required on Ubuntu)
-    if ! dpkg -l python3-venv >/dev/null 2>&1; then
+    if ! dpkg -l python3-venv; then
         log "Installing python3-venv..."
         sudo apt update
         sudo apt install -y --show-progress python3-venv python3-dev python3-pip build-essential || {
@@ -354,7 +354,7 @@ install_python_environment() {
     
     # Register Jupyter kernel
     log "Registering Jupyter kernel..."
-    python -m ipykernel install --user --name=astro --display-name="Astronomy Python" >/dev/null 2>&1 || {
+    python -m ipykernel install --user --name=astro --display-name="Astronomy Python" || {
         warning "Failed to register Jupyter kernel (non-critical)"
     }
     
@@ -374,15 +374,15 @@ install_astronomy_tools() {
     # Install XWayland for GUI support on Wayland systems
     if [ "$DISPLAY_SYSTEM" == "wayland" ]; then
         log "Installing XWayland for GUI compatibility..."
-        sudo apt install -y --show-progress xwayland >/dev/null 2>&1 || {
+        sudo apt install -y --show-progress xwayland || {
             warning "XWayland installation failed (GUI tools may not work)"
         }
     fi
     
     # Install DS9 FITS viewer
-    if ! command -v ds9 >/dev/null 2>&1; then
+    if ! command -v ds9; then
         log "Installing DS9 FITS image viewer..."
-        sudo apt install -y --show-progress saods9 >/dev/null 2>&1 || {
+        sudo apt install -y --show-progress saods9 || {
             warning "DS9 installation failed (optional tool)"
         }
     fi
@@ -399,12 +399,12 @@ install_topcat() {
     log "Installing TOPCAT catalog analysis tool..."
     
     # Install Java (required for TOPCAT)
-    if ! command -v java >/dev/null 2>&1; then
+    if ! command -v java; then
         log "Installing Java runtime..."
         # Try OpenJDK 21 first (Ubuntu 24.04), fall back to 17 (Ubuntu 22.04)
-        if ! sudo apt install -y --show-progress openjdk-21-jre >/dev/null 2>&1; then
+        if ! sudo apt install -y --show-progress openjdk-21-jre; then
             log "OpenJDK 21 not available, trying OpenJDK 17..."
-            sudo apt install -y --show-progress openjdk-17-jre >/dev/null 2>&1 || {
+            sudo apt install -y --show-progress openjdk-17-jre || {
                 error "Failed to install Java"
                 return 1
             }
@@ -791,7 +791,7 @@ cmd_doctor() {
     fi
     
     # Check 4: Java (for TOPCAT)
-    if command -v java >/dev/null 2>&1; then
+    if command -v java; then
         local java_version=$(java -version 2>&1 | head -1)
         success "Java installed: $java_version"
     else
@@ -811,7 +811,7 @@ cmd_doctor() {
     # Check 6: Display system
     if [ "$DISPLAY_SYSTEM" == "wayland" ]; then
         info "Display: Wayland detected"
-        if command -v Xwayland >/dev/null 2>&1 || dpkg -l xwayland >/dev/null 2>&1; then
+        if command -v Xwayland || dpkg -l xwayland; then
             success "XWayland available for GUI compatibility"
         else
             warning "XWayland not installed (GUI tools may not work)"
@@ -922,7 +922,7 @@ cmd_topcat() {
 }
 
 cmd_ds9() {
-    if ! command -v ds9 >/dev/null 2>&1; then
+    if ! command -v ds9; then
         error "DS9 not installed"
         echo -e "Install with: sudo apt install saods9"
         exit 1
@@ -1012,7 +1012,7 @@ cmd_uninstall() {
     log "Starting uninstall..."
     
     # Remove Jupyter kernel
-    if command -v jupyter >/dev/null 2>&1; then
+    if command -v jupyter; then
         log "Removing Jupyter kernel..."
         jupyter kernelspec uninstall astro -y 2>/dev/null || true
     fi
