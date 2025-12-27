@@ -228,8 +228,8 @@ check_dependencies() {
     
     if [ ${#missing[@]} -gt 0 ]; then
         log "Installing missing system dependencies: ${missing[*]}"
-        sudo apt update -qq
-        sudo apt install -y "${missing[@]}" || {
+        sudo apt update
+        sudo apt install -y --show-progress "${missing[@]}" || {
             error "Failed to install dependencies"
             exit 1
         }
@@ -294,8 +294,8 @@ install_python_environment() {
     # Ensure python3-venv is installed (required on Ubuntu)
     if ! dpkg -l python3-venv >/dev/null 2>&1; then
         log "Installing python3-venv..."
-        sudo apt update -qq
-        sudo apt install -y python3-venv python3-dev python3-pip build-essential || {
+        sudo apt update
+        sudo apt install -y --show-progress python3-venv python3-dev python3-pip build-essential || {
             error "Failed to install Python development packages"
             exit 1
         }
@@ -374,7 +374,7 @@ install_astronomy_tools() {
     # Install XWayland for GUI support on Wayland systems
     if [ "$DISPLAY_SYSTEM" == "wayland" ]; then
         log "Installing XWayland for GUI compatibility..."
-        sudo apt install -y xwayland >/dev/null 2>&1 || {
+        sudo apt install -y --show-progress xwayland >/dev/null 2>&1 || {
             warning "XWayland installation failed (GUI tools may not work)"
         }
     fi
@@ -382,7 +382,7 @@ install_astronomy_tools() {
     # Install DS9 FITS viewer
     if ! command -v ds9 >/dev/null 2>&1; then
         log "Installing DS9 FITS image viewer..."
-        sudo apt install -y saods9 >/dev/null 2>&1 || {
+        sudo apt install -y --show-progress saods9 >/dev/null 2>&1 || {
             warning "DS9 installation failed (optional tool)"
         }
     fi
@@ -402,9 +402,9 @@ install_topcat() {
     if ! command -v java >/dev/null 2>&1; then
         log "Installing Java runtime..."
         # Try OpenJDK 21 first (Ubuntu 24.04), fall back to 17 (Ubuntu 22.04)
-        if ! sudo apt install -y openjdk-21-jre >/dev/null 2>&1; then
+        if ! sudo apt install -y --show-progress openjdk-21-jre >/dev/null 2>&1; then
             log "OpenJDK 21 not available, trying OpenJDK 17..."
-            sudo apt install -y openjdk-17-jre >/dev/null 2>&1 || {
+            sudo apt install -y --show-progress openjdk-17-jre >/dev/null 2>&1 || {
                 error "Failed to install Java"
                 return 1
             }
